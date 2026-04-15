@@ -9,10 +9,10 @@ def attack_against_baseline_defense_env():
     env.reset()
     done = False
     while not done:
-        attack_action = env.attacker_action_space.sample()
+        attack_action = env.unwrapped.attacker_action_space.sample()
         defense_action = None
         a = (attack_action, defense_action)
-        obs, reward, done, _, info = env.step(a)
+        obs, reward, done, info = env.step(a)
 
 
 def attack_against_random_defense_env():
@@ -23,10 +23,10 @@ def attack_against_random_defense_env():
     env.reset()
     done = False
     while not done:
-        attack_action = env.attacker_action_space.sample()
+        attack_action = env.unwrapped.attacker_action_space.sample()
         defense_action = None
         a = (attack_action, defense_action)
-        obs, reward, done, _, info = env.step(a)
+        obs, reward, done, info = env.step(a)
 
 def defense_against_baseline_attack_env():
     versions = range(0,20)
@@ -37,9 +37,9 @@ def defense_against_baseline_attack_env():
     done = False
     while not done:
         attack_action = None
-        defense_action = env.defender_action_space.sample()
+        defense_action = env.unwrapped.defender_action_space.sample()
         a = (attack_action, defense_action)
-        obs, reward, done, _, info = env.step(a)
+        obs, reward, done, info = env.step(a)
 
 
 def defense_against_random_attack_env():
@@ -51,9 +51,9 @@ def defense_against_random_attack_env():
     done = False
     while not done:
         attack_action = None
-        defense_action = env.defender_action_space.sample()
+        defense_action = env.unwrapped.defender_action_space.sample()
         a = (attack_action, defense_action)
-        obs, reward, done, _, info = env.step(a)
+        obs, reward, done, info = env.step(a)
 
 def two_agents_env():
     versions = range(0,20)
@@ -63,17 +63,17 @@ def two_agents_env():
     env.reset()
     done = False
     while not done:
-        attack_action = env.attacker_action_space.sample()
-        defense_action = env.defender_action_space.sample()
+        attack_action = env.unwrapped.attacker_action_space.sample()
+        defense_action = env.unwrapped.defender_action_space.sample()
         a = (attack_action, defense_action)
-        obs, reward, done, _, info = env.step(a)
+        obs, reward, done, info = env.step(a)
 
 def main():
-    #attack_against_baseline_defense_env()
+    # attack_against_baseline_defense_env()
     attack_against_random_defense_env()
-    #defense_against_baseline_attack_env()
-    #defense_against_random_attack_env()
-    #two_agents_env()
+    # defense_against_baseline_attack_env()
+    # defense_against_random_attack_env()
+    # two_agents_env()
 
 if __name__ == '__main__':
     main()

@@ -63,6 +63,8 @@ class IdsGameEnv(gym.Env, ABC):
          'render.modes': ['human', 'rgb_array'],
          'video.frames_per_second' : 50 # Video rendering speed
         }
+        import gymnasium as gym
+        self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
         self.num_states = self.idsgame_config.game_config.num_nodes
         self.num_states_full = int(math.pow(self.idsgame_config.game_config.max_value+1,
@@ -119,7 +121,7 @@ class IdsGameEnv(gym.Env, ABC):
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
             return self.get_observation()[0], (100*constants.GAME_CONFIG.NEGATIVE_REWARD,
-                                            100*constants.GAME_CONFIG.NEGATIVE_REWARD), True, True, info
+                                            100*constants.GAME_CONFIG.NEGATIVE_REWARD), True, info
 
         attack_action, defense_action = action
 
@@ -223,15 +225,18 @@ class IdsGameEnv(gym.Env, ABC):
         trajectory.append(self.state)
         if self.idsgame_config.save_trajectories:
             self.game_trajectories.append(trajectory)
-        return observation[0], reward, self.state.done, self.state.done, info
+        return observation[0], reward, self.state.done, info
 
-    def reset(self, seed: int = 0, update_stats = False) -> np.ndarray:
+    def reset(self, seed: int = None, options: dict = None, update_stats = False) -> np.ndarray:
         """
         Resets the environment and returns the initial state
 
+        :param seed: random seed
+        :param options: options for resetting
         :param update_stats: whether the game count should be incremented or not
         :return: the initial state
         """
+        super().reset(seed=seed)
         self.past_moves = []
         self.past_positions = []
         self.past_reconnaissance_activities = []
@@ -263,7 +268,7 @@ class IdsGameEnv(gym.Env, ABC):
         self.attacks = []
         self.hacked_nodes = []
         self.num_failed_attacks = 0
-        return observation[0], {}
+        return observation[0]
 
     def restart(self) -> np.ndarray:
         """
@@ -273,7 +278,7 @@ class IdsGameEnv(gym.Env, ABC):
         """
         obs = self.reset()
         self.state.restart()
-        return obs[0], {}
+        return obs
 
     def render(self, mode: str ='human'):
         """
