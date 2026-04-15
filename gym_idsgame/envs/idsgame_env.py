@@ -60,7 +60,9 @@ class IdsGameEnv(gym.Env, ABC):
         self.viewer = None
         self.steps_beyond_done = None
         self.metadata = {
+         'render_modes': ['human', 'rgb_array'],
          'render.modes': ['human', 'rgb_array'],
+         'render_fps': 50,
          'video.frames_per_second' : 50 # Video rendering speed
         }
         import gymnasium as gym
