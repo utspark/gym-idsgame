@@ -191,7 +191,8 @@ class IdsGameEnv(gym.Env, ABC):
                     self.failed_attacks[(target_node_id, attack_type)] = 1
                 self.past_positions.append(self.state.attacker_pos)
                 detected = self.state.simulate_detection(target_node_id, reconnaissance=reconnaissance,
-                                                         reconnaissance_detection_factor=self.idsgame_config.reconnaissance_detection_factor)
+                                                         reconnaissance_detection_factor=self.idsgame_config.reconnaissance_detection_factor,
+                                                         np_random=self.np_random)
                 if detected:
                     self.state.done = True
                     self.state.detected = True
@@ -238,7 +239,16 @@ class IdsGameEnv(gym.Env, ABC):
         :param update_stats: whether the game count should be incremented or not
         :return: the initial state
         """
+        if seed is None:
+            seed = 0
         super().reset(seed=seed)
+        self.action_space.seed(seed)
+        self.attacker_action_space.seed(seed)
+        self.defender_action_space.seed(seed)
+        if self.idsgame_config.attacker_agent is not None:
+            self.idsgame_config.attacker_agent.np_random = self.np_random
+        if self.idsgame_config.defender_agent is not None:
+            self.idsgame_config.defender_agent.np_random = self.np_random
         self.past_moves = []
         self.past_positions = []
         self.past_reconnaissance_activities = []
@@ -254,14 +264,15 @@ class IdsGameEnv(gym.Env, ABC):
                             attack_val = self.idsgame_config.game_config.attack_val,
                             det_val = self.idsgame_config.game_config.det_val,
                             vulnerability_val = self.idsgame_config.game_config.vulnerabilitiy_val,
-                            num_vulnerabilities_per_layer=self.idsgame_config.game_config.num_vulnerabilities_per_layer,
+                            num_vulnerabilities_per_layer=self.idsgame_config.game_config.num_vulnerabilities_per_node,
                             num_vulnerabilities_per_node=self.idsgame_config.game_config.num_vulnerabilities_per_node,
                             randomize_visibility=self.idsgame_config.randomize_visibility,
-                            visibility_p=self.idsgame_config.visibility_p)
+                            visibility_p=self.idsgame_config.visibility_p,
+                            np_random=self.np_random)
         self.a_cumulative_reward = 0
         self.d_cumulative_reward = 0
         if self.idsgame_config.randomize_starting_position:
-            self.state.randomize_attacker_position(self.idsgame_config.game_config.network_config)
+            self.state.randomize_attacker_position(self.idsgame_config.game_config.network_config, np_random=self.np_random)
         if self.viewer is not None:
             self.viewer.gameframe.reset()
         observation = self.get_observation()
