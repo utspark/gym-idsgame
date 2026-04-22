@@ -3,11 +3,10 @@ import os
 import subprocess
 import tempfile
 import os.path
-import distutils.spawn, distutils.version
+import shutil
 import numpy as np
-from six import StringIO
-import six
-from gym import error, logger
+import io
+from gymnasium import error, logger
 
 def touch(path):
     open(path, 'a').close()
@@ -43,7 +42,7 @@ class IdsGameVideoRecorder(object):
             if 'ansi' in modes:
                 self.ansi_mode = True
             else:
-                logger.info('Disabling video recorder because {} neither supports video mode "rgb_array" nor "ansi".'.format(env))
+                logger.warn('Disabling video recorder because {} neither supports video mode "rgb_array" nor "ansi".'.format(env))
                 # Whoops, turns out we shouldn't be enabled after all
                 self.enabled = False
                 return
@@ -85,7 +84,7 @@ class IdsGameVideoRecorder(object):
         self.metadata_path = '{}.meta.json'.format(path_base)
         self.write_metadata()
 
-        logger.info('Starting new video recorder writing to %s', self.path)
+        logger.warn('Starting new video recorder writing to %s', self.path)
         self.empty = True
 
     @property
@@ -95,7 +94,7 @@ class IdsGameVideoRecorder(object):
     def capture_frame(self):
         """Render the given `env` and add the resulting frame to the video."""
         if not self.functional: return
-        logger.debug('Capturing video frame: path=%s', self.path)
+        logger.warn('Capturing video frame: path=%s', self.path)
 
         render_mode = 'ansi' if self.ansi_mode else 'rgb_array'
         frames = self.env.render(mode=render_mode)
@@ -125,7 +124,7 @@ class IdsGameVideoRecorder(object):
             return
 
         if self.encoder:
-            logger.debug('Closing video encoder: path=%s', self.path)
+            logger.warn('Closing video encoder: path=%s', self.path)
             self.encoder.close()
             self.encoder = None
         else:
@@ -138,7 +137,7 @@ class IdsGameVideoRecorder(object):
 
         # If broken, get rid of the output file, otherwise we'd leak it.
         if self.broken:
-            logger.info('Cleaning up paths for broken video recorder: path=%s metadata_path=%s', self.path, self.metadata_path)
+            logger.warn('Cleaning up paths for broken video recorder: path=%s metadata_path=%s', self.path, self.metadata_path)
 
             # Might have crashed before even starting the output file, don't try to remove in that case.
             if os.path.exists(self.path):
@@ -185,21 +184,20 @@ class TextEncoder(object):
         self.frames = []
 
     def capture_frame(self, frame):
-        from six import string_types
         string = None
-        if isinstance(frame, string_types):
+        if isinstance(frame, str):
             string = frame
-        elif isinstance(frame, StringIO):
+        elif isinstance(frame, io.StringIO):
             string = frame.getvalue()
         else:
             raise error.InvalidFrame('Wrong type {} for {}: text frame must be a string or StringIO'.format(type(frame), frame))
 
         frame_bytes = string.encode('utf-8')
 
-        if frame_bytes[-1:] != six.b('\n'):
+        if frame_bytes[-1:] != b'\n':
             raise error.InvalidFrame('Frame must end with a newline: """{}"""'.format(string))
 
-        if six.b('\r') in frame_bytes:
+        if b'\r' in frame_bytes:
             raise error.InvalidFrame('Frame contains carriage returns (only newlines are allowed: """{}"""'.format(string))
 
         self.frames.append(frame_bytes)
@@ -211,14 +209,14 @@ class TextEncoder(object):
         # Turn frames into events: clear screen beforehand
         # https://rosettacode.org/wiki/Terminal_control/Clear_the_screen#Python
         # https://rosettacode.org/wiki/Terminal_control/Cursor_positioning#Python
-        clear_code = six.b("%c[2J\033[1;1H" % (27))
+        clear_code = b"%c[2J\033[1;1H" % (27)
         # Decode the bytes as UTF-8 since JSON may only contain UTF-8
-        events = [ (frame_duration, (clear_code+frame.replace(six.b('\n'),six.b('\r\n'))).decode('utf-8'))  for frame in self.frames ]
+        events = [ (frame_duration, (clear_code+frame.replace(b'\n',b'\r\n')).decode('utf-8'))  for frame in self.frames ]
 
         # Calculate frame size from the largest frames.
         # Add some padding since we'll get cut off otherwise.
-        height = max([frame.count(six.b('\n')) for frame in self.frames]) + 1
-        width = max([max([len(line) for line in frame.split(six.b('\n'))]) for frame in self.frames]) + 2
+        height = max([frame.count(b'\n') for frame in self.frames]) + 1
+        width = max([max([len(line) for line in frame.split(b'\n')]) for frame in self.frames]) + 2
 
         data = {
             "version": 1,
@@ -251,9 +249,9 @@ class ImageEncoder(object):
         self.frame_shape = frame_shape
         self.frames_per_sec = frames_per_sec
 
-        if distutils.spawn.find_executable('avconv') is not None:
+        if shutil.which('avconv') is not None:
             self.backend = 'avconv'
-        elif distutils.spawn.find_executable('ffmpeg') is not None:
+        elif shutil.which('ffmpeg') is not None:
             self.backend = 'ffmpeg'
         else:
             raise error.DependencyNotInstalled("""Found neither the ffmpeg nor avconv executables. On OS X, you can install ffmpeg via `brew install ffmpeg`. On most Ubuntu variants, `sudo apt-get install ffmpeg` should do it. On Ubuntu 14.04, however, you'll need to install avconv with `sudo apt-get install libav-tools`.""")
@@ -289,7 +287,7 @@ class ImageEncoder(object):
                      self.output_path
                      )
 
-        logger.debug('Starting ffmpeg with "%s"', ' '.join(self.cmdline))
+        logger.warn('Starting ffmpeg with "%s"', ' '.join(self.cmdline))
         if hasattr(os,'setsid'): #setsid not present on Windows
             self.proc = subprocess.Popen(self.cmdline, stdin=subprocess.PIPE, preexec_fn=os.setsid)
         else:
@@ -303,10 +301,7 @@ class ImageEncoder(object):
         if frame.dtype != np.uint8:
             raise error.InvalidFrame("Your frame has data type {}, but we require uint8 (i.e. RGB values from 0-255).".format(frame.dtype))
 
-        if distutils.version.LooseVersion(np.__version__) >= distutils.version.LooseVersion('1.9.0'):
-            self.proc.stdin.write(frame.tobytes())
-        else:
-            self.proc.stdin.write(frame.tostring())
+        self.proc.stdin.write(frame.tobytes())
 
     def close(self):
         self.proc.stdin.close()

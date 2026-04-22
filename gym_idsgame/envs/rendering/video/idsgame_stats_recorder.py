@@ -2,9 +2,34 @@ import json
 import os
 import time
 
-from gym import error
-from gym.utils import atomic_write
-from gym.utils.json_utils import json_encode_np
+from gymnasium import error
+import numpy as np
+
+def json_encode_np(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+import contextlib
+
+@contextlib.contextmanager
+def atomic_write(filepath):
+    import tempfile
+    tmppath = None
+    try:
+        dirpath = os.path.dirname(filepath)
+        with tempfile.NamedTemporaryFile(mode='w', dir=dirpath, delete=False) as f:
+            tmppath = f.name
+            yield f
+        os.replace(tmppath, filepath)
+    except Exception:
+        if tmppath and os.path.exists(tmppath):
+            os.remove(tmppath)
+        raise
 
 class StatsRecorder(object):
     def __init__(self, directory, file_prefix, autoreset=False, env_id=None):
@@ -107,7 +132,7 @@ class StatsRecorder(object):
         if self.closed:
             return
 
-        with atomic_write.atomic_write(self.path) as f:
+        with atomic_write(self.path) as f:
             json.dump({
                 'initial_reset_timestamp': self.initial_reset_timestamp,
                 'timestamps': self.timestamps,
