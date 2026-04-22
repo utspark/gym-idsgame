@@ -72,19 +72,20 @@ class IdsGameMonitor(Wrapper):
         self._before_step(action)
         # if self.episode_id % self.video_frequency == 0:
         #     self._before_step(action)
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        done = terminated or truncated
         # if self.episode_id % self.video_frequency == 0:
         done = self._after_step(observation, reward, done, info)
-        return observation, reward, done, info
+        return observation, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
         if (self.openai_baseline and len(self.episode_frames) > 0) or (self.openai_baseline and not self.openai_baseline_reset):
-            return
+            return self.env.get_observation()[0], {}
         self._before_reset()
-        observation = self.env.reset(**kwargs)
+        observation, info = self.env.reset(**kwargs)
         self._after_reset(observation)
         self.openai_baseline_reset = False
-        return observation
+        return observation, info
 
     def set_monitor_mode(self, mode):
         logger.warn("Setting the monitor mode is deprecated and will be removed soon")

@@ -228,7 +228,7 @@ class IdsGameEnv(gym.Env, ABC):
         trajectory.append(self.state)
         if self.idsgame_config.save_trajectories:
             self.game_trajectories.append(trajectory)
-        return observation[0], reward, self.state.done, info
+        return observation, reward, self.state.done, False, info
 
     def reset(self, seed: int = None, options: dict = None, update_stats = False) -> np.ndarray:
         """
@@ -281,7 +281,7 @@ class IdsGameEnv(gym.Env, ABC):
         self.attacks = []
         self.hacked_nodes = []
         self.num_failed_attacks = 0
-        return observation[0]
+        return observation, {}
 
     def restart(self) -> np.ndarray:
         """

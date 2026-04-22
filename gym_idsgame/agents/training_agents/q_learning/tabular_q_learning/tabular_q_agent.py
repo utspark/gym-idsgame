@@ -82,8 +82,8 @@ class TabularQAgent(QAgent):
         if len(self.train_result.avg_episode_steps) > 0:
             self.config.logger.warning("starting training with non-empty result object")
         done = False
-        attacker_obs = self.env.reset(update_stats=False)
-        defender_obs = None
+        obs, _ = self.env.reset(update_stats=False)
+        attacker_obs, defender_obs = obs
 
         # Tracking metrics
         episode_attacker_rewards = []
@@ -138,7 +138,8 @@ class TabularQAgent(QAgent):
                 action = (attacker_action, defender_action)
 
                 # Take a step in the environment
-                reward, obs_prime, done = self.step_and_update(action, s_idx_a, s_idx_d)
+                obs_prime, reward, done, _, info = self.env.step(action)
+                reward, obs_prime, done = self.step_and_update(action, s_idx_a, s_idx_d, reward, obs_prime, done)
 
                 # Update state information and metrics
                 attacker_reward, defender_reward = reward
@@ -195,8 +196,8 @@ class TabularQAgent(QAgent):
 
             # Reset environment for the next episode and update game stats
             done = False
-            attacker_obs = self.env.reset(update_stats=True)
-            defender_obs = None
+            obs, _ = self.env.reset(update_stats=True)
+            attacker_obs, defender_obs = obs
             self.outer_train.update(1)
 
             # Anneal epsilon linearly
@@ -223,11 +224,9 @@ class TabularQAgent(QAgent):
 
         return self.train_result
 
-    def step_and_update(self, action, s_idx_a, defender_state_node_id) -> Union[float, np.ndarray, bool]:
-        obs_prime_attacker, reward, done, info = self.env.step(action)
+    def step_and_update(self, action, s_idx_a, s_idx_d, reward, obs_prime, done) -> Union[float, np.ndarray, bool]:
         attacker_reward, defender_reward = reward
-        attacker_obs_prime = obs_prime_attacker
-        defender_obs_prime = None
+        attacker_obs_prime, defender_obs_prime = obs_prime
         attacker_action, defender_action = action
 
         if self.config.attacker:
@@ -249,7 +248,7 @@ class TabularQAgent(QAgent):
                 t = tuple(defender_obs_prime.astype(int).flatten().tolist())
                 t = tuple(map(lambda x: min(x, self.max_value), t))
                 s_prime_idx = self.state_to_idx[t]
-            self.q_learning_update(defender_state_node_id, defender_action, defender_reward, s_prime_idx,
+            self.q_learning_update(s_idx_d, defender_action, defender_reward, s_prime_idx,
                                    attacker=False)
 
         return reward, (attacker_obs_prime, defender_obs_prime), done
@@ -314,8 +313,8 @@ class TabularQAgent(QAgent):
             "acc_D_R:{:.2f}".format(0.0, 0,0, 0.0, 0.0, 0.0, 0.0))
 
         # Eval
-        attacker_obs = self.env.reset(update_stats=False)
-        defender_obs = None
+        obs, _ = self.env.reset(update_stats=False)
+        attacker_obs, defender_obs = obs
 
         # Get initial frame
         if self.config.video or self.config.gifs:
@@ -378,16 +377,16 @@ class TabularQAgent(QAgent):
                 action = (attacker_action, defender_action)
 
                 # Take a step in the environment
-                obs_prime_attacker, reward, done, _ = self.env.step(action)
+                obs_prime, reward, done, _, _ = self.env.step(action)
 
                 # Update state information and metrics
                 attacker_reward, defender_reward = reward
-                obs_prime_attacker, obs_prime_defender = obs_prime_attacker, None
+                attacker_obs_prime, defender_obs_prime = obs_prime
                 episode_attacker_reward += attacker_reward
                 episode_defender_reward += defender_reward
                 episode_step += 1
-                attacker_obs = obs_prime_attacker
-                defender_obs = obs_prime_defender
+                attacker_obs = attacker_obs_prime
+                defender_obs = defender_obs_prime
 
                 # Save state values for analysis later
                 if self.config.video and len(self.env.episode_frames) > 1:
@@ -459,8 +458,8 @@ class TabularQAgent(QAgent):
 
             # Reset for new eval episode
             done = False
-            attacker_obs = self.env.reset(update_stats=False)
-            defender_obs = None
+            obs, _ = self.env.reset(update_stats=False)
+            attacker_obs, defender_obs = obs
             # Get initial frame
             if self.config.video or self.config.gifs:
                 initial_frame = self.env.render(mode="rgb_array")[0]
