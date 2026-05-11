@@ -1,9 +1,47 @@
-from gym import Wrapper
-from gym import error, version, logger
-import os, json, numpy as np, six
-from gym.utils import atomic_write, closer
-from gym.utils.json_utils import json_encode_np
-import imageio
+import gymnasium as gym
+from gymnasium import Wrapper
+from gymnasium import error, logger
+import os, json, numpy as np, contextlib, imageio
+
+def json_encode_np(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+@contextlib.contextmanager
+def atomic_write(filepath):
+    import tempfile
+    tmppath = None
+    try:
+        dirpath = os.path.dirname(filepath)
+        with tempfile.NamedTemporaryFile(mode='w', dir=dirpath, delete=False) as f:
+            tmppath = f.name
+            yield f
+        os.replace(tmppath, filepath)
+    except Exception:
+        if tmppath and os.path.exists(tmppath):
+            os.remove(tmppath)
+        raise
+
+class Closer:
+    def __init__(self):
+        self.closeables = {}
+        self._next_id = 0
+    def register(self, closeable):
+        self._next_id += 1
+        self.closeables[self._next_id] = closeable
+        return self._next_id
+    def unregister(self, id):
+        self.closeables.pop(id, None)
+    def close(self):
+        for closeable in self.closeables.values():
+            closeable.close()
+
+monitor_closer = Closer()
 from gym_idsgame.envs.rendering.video import idsgame_video_recorder
 from gym_idsgame.envs.rendering.video import idsgame_stats_recorder
 
@@ -34,22 +72,23 @@ class IdsGameMonitor(Wrapper):
         self._before_step(action)
         # if self.episode_id % self.video_frequency == 0:
         #     self._before_step(action)
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        done = terminated or truncated
         # if self.episode_id % self.video_frequency == 0:
         done = self._after_step(observation, reward, done, info)
-        return observation, reward, done, info
+        return observation, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
         if (self.openai_baseline and len(self.episode_frames) > 0) or (self.openai_baseline and not self.openai_baseline_reset):
-            return
+            return self.env.get_observation()[0], {}
         self._before_reset()
-        observation = self.env.reset(**kwargs)
+        observation, info = self.env.reset(**kwargs)
         self._after_reset(observation)
         self.openai_baseline_reset = False
-        return observation
+        return observation, info
 
     def set_monitor_mode(self, mode):
-        logger.info("Setting the monitor mode is deprecated and will be removed soon")
+        logger.warn("Setting the monitor mode is deprecated and will be removed soon")
         self._set_mode(mode)
 
 
@@ -73,11 +112,8 @@ class IdsGameMonitor(Wrapper):
             env_id = self.env.spec.id
 
         if not os.path.exists(directory):
-            logger.info('Creating monitor directory %s', directory)
-            if six.PY3:
-                os.makedirs(directory, exist_ok=True)
-            else:
-                os.makedirs(directory)
+            logger.warn('Creating monitor directory %s', directory)
+            os.makedirs(directory, exist_ok=True)
 
         if video_callable is None:
             video_callable = self.periodic_video_schedule
@@ -124,8 +160,8 @@ class IdsGameMonitor(Wrapper):
         # Give it a very distiguished name, since we need to pick it
         # up from the filesystem later.
         path = os.path.join(self.directory, '{}.manifest.{}.manifest.json'.format(self.file_prefix, self.file_infix))
-        logger.debug('Writing training manifest file to %s', path)
-        with atomic_write.atomic_write(path) as f:
+        logger.warn('Writing training manifest file to %s', path)
+        with atomic_write(path) as f:
             # We need to write relative paths here since people may
             # move the training_dir around. It would be cleaner to
             # already have the basenames rather than basename'ing
@@ -136,6 +172,12 @@ class IdsGameMonitor(Wrapper):
                            for v, m in self.videos],
                 'env_info': self._env_info(),
             }, f, default=json_encode_np)
+
+    def render(self, *args, **kwargs):
+        return self.env.render(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.env, name)
 
     def close(self):
         """Flush all monitor data to disk and close any open rending windows."""
@@ -152,7 +194,7 @@ class IdsGameMonitor(Wrapper):
         monitor_closer.unregister(self._monitor_id)
         self.enabled = False
 
-        logger.info('''Finished writing results. You can upload them to the scoreboard via gym.upload(%r)''', self.directory)
+        logger.warn('''Finished writing results. You can upload them to the scoreboard via gym.upload(%r)''', self.directory)
 
     def _set_mode(self, mode):
         if mode == 'evaluation':
@@ -240,7 +282,7 @@ class IdsGameMonitor(Wrapper):
 
     def _env_info(self):
         env_info = {
-            'gym_version': version.VERSION,
+            'gym_version': '0.26.2',
         }
         if self.env.spec:
             env_info['env_id'] = self.env.spec.id
@@ -278,7 +320,7 @@ def clear_monitor_files(training_dir):
     if len(files) == 0:
         return
 
-    logger.info('Clearing %d monitor files from previous run (because force=True was provided)', len(files))
+    logger.warn('Clearing %d monitor files from previous run (because force=True was provided)', len(files))
     for file in files:
         os.unlink(file)
 
@@ -290,8 +332,6 @@ def capped_cubic_video_schedule(episode_id):
 
 def disable_videos(episode_id):
     return False
-
-monitor_closer = closer.Closer()
 
 # This method gets used for a sanity check in scoreboard/api.py. It's
 # not intended for use outside of the gym codebase.
@@ -318,7 +358,7 @@ def load_results(training_dir):
         logger.error('No manifests found in training directory %s', training_dir)
         return
 
-    logger.debug('Uploading data from manifest %s', ', '.join(manifests))
+    logger.warn('Uploading data from manifest %s', ', '.join(manifests))
 
     # Load up stats + video files
     stats_files = []

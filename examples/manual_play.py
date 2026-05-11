@@ -22,4 +22,4 @@ if __name__ == '__main__':
     random_seed = 0
     env_name = "idsgame-random_attack-v2"
     env = gym.make(env_name)
-    ManualDefenseAgent(env.idsgame_config)
+    ManualDefenseAgent(env.unwrapped.idsgame_config)

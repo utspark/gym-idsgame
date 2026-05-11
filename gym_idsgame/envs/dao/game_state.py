@@ -115,7 +115,8 @@ class GameState():
                   num_vulnerabilities_per_node : int = 1, det_val : int = 2, vulnerability_val: int = 0,
                   num_vulnerabilities_per_layer : int = 1,
                   network_config : NetworkConfig = None, randomize_state : bool = False,
-                  randomize_visibility : bool = False, visibility_p : float = 0.5):
+                  randomize_visibility : bool = False, visibility_p : float = 0.5,
+                  np_random: np.random.Generator = None):
         """
         Sets the state
 
@@ -178,7 +179,8 @@ class GameState():
 
         if randomize_visibility:
             for node_id in range(len(reconnaissance_state)):
-                if np.random.rand() < visibility_p:
+                if (isinstance(np_random, np.random.Generator) and np_random.random() < visibility_p) \
+                        or (not isinstance(np_random, np.random.Generator) and np_random.rand() < visibility_p):
                     reconnaissance_state[node_id] = defense_values[node_id]
                     self.reconnaissance_actions.append(node_id)
         self.attack_values = attack_values.astype(np.int32)
@@ -192,7 +194,8 @@ class GameState():
                  num_attack_types : int = None, defense_val : int = None, attack_val : int = None,
                  det_val : int = None, vulnerability_val : int = None,
                  num_vulnerabilities_per_layer : int = None, num_vulnerabilities_per_node : int = None,
-                 randomize_visibility : bool = False, visibility_p : float = 0.5) -> None:
+                 randomize_visibility : bool = False, visibility_p : float = 0.5,
+                 np_random: np.random.Generator = None) -> None:
         """
         Updates the current state for a new game
 
@@ -227,6 +230,8 @@ class GameState():
         self.defense_events = []
         self.reconnaissance_actions = []
         self.attacker_pos = init_state.attacker_pos
+        if np_random is None:
+            np_random = np.random
         if not randomize_state:
             self.attack_values = np.copy(init_state.attack_values)
             self.defense_values = np.copy(init_state.defense_values)
@@ -238,7 +243,8 @@ class GameState():
                            defense_val=defense_val,
                            attack_val=attack_val, num_vulnerabilities_per_node=num_vulnerabilities_per_node,
                            det_val=det_val, vulnerability_val=vulnerability_val,
-                           randomize_visibility=randomize_visibility, visibility_p=visibility_p)
+                           randomize_visibility=randomize_visibility, visibility_p=visibility_p,
+                           np_random=np_random)
         self.detected = False
         self.hacked = False
 
@@ -360,19 +366,27 @@ class GameState():
             return True
         return self.attack_values[attacked_node_id][attack_type] > self.defense_values[attacked_node_id][attack_type]
 
-    def simulate_detection(self, node_id: int, reconnaissance: bool, reconnaissance_detection_factor : float = 1) -> bool:
+    def simulate_detection(self, node_id: int, reconnaissance: bool, reconnaissance_detection_factor : float = 1,
+                           np_random: np.random.Generator = None) -> bool:
         """
         Simulates detection for a unsuccessful attack
 
         :param node_id: the id of the node to simulate deteciton of
         :param reconnaissance: boolean flag, if true simulate detection of reconnaissance activity
+        :param np_random: random number generator
         :return: True if the node was detected, otherwise False
         """
+        if np_random is None:
+            np_random = np.random
         if not reconnaissance:
-            return np.random.rand() < self.defense_det[node_id]/10
+            if isinstance(np_random, np.random.Generator):
+                return np_random.random() < self.defense_det[node_id]/10
+            return np_random.rand() < self.defense_det[node_id]/10
         else:
             det_prob = (self.defense_det[node_id] / 10)*reconnaissance_detection_factor
-            return np.random.rand() < det_prob
+            if isinstance(np_random, np.random.Generator):
+                return np_random.random() < det_prob
+            return np_random.rand() < det_prob
 
     def get_attacker_observation(self, network_config: NetworkConfig, local_view=False, reconnaissance = False,
                                  reconnaissance_bool_features = False) -> np.ndarray:
@@ -546,7 +560,9 @@ class GameState():
             defense_observation[node_id] = np.append(self.defense_values[node_id], self.defense_det[node_id])
         return defense_observation
 
-    def randomize_attacker_position(self, network_config : NetworkConfig):
+    def randomize_attacker_position(self, network_config : NetworkConfig, np_random: np.random.Generator = None):
+        if np_random is None:
+            np_random = np.random
         temp_rows = list(range(1, network_config.num_rows))
         temp_cols = list(range(0, network_config.num_cols))
         positions = []
@@ -556,7 +572,10 @@ class GameState():
                 if network_config.node_list[node_id] == NodeType.SERVER.value \
                         or network_config.node_list[node_id] == NodeType.START.value:
                     positions.append((r, c))
-        rnd_idx = np.random.choice(list(range(len(positions))))
+        if isinstance(np_random, np.random.Generator):
+            rnd_idx = np_random.integers(0, len(positions))
+        else:
+            rnd_idx = np.random.choice(list(range(len(positions))))
         rnd_pos = positions[rnd_idx]
         id = network_config.get_node_id(rnd_pos)
         if network_config.node_list[id] == NodeType.START.value:
