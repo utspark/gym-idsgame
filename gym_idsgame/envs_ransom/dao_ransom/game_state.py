@@ -80,7 +80,7 @@ class GameState:
         self.num_hacks = num_hacks
         self.hacked = hacked
         self.action_descriptors = ["RE", "F1", "F2", "EX"]
-        self.reconnaissance_actions = []
+        # self.reconnaissance_actions = []
         # self.max_random_v_val = max_random_v_val
 
     def default_state(
@@ -203,13 +203,11 @@ class GameState:
 
         :return: a copy of the current state
         """
-        new_state = GameState(min_random_a_val=self.min_random_a_val, min_random_d_val=self.min_random_d_val,
-                              min_random_det_val=self.min_random_det_val, max_value=self.max_value,
-                              max_random_v_val=self.max_random_v_val)
+        new_state = GameState()
         new_state.attack_values = np.copy(self.attack_values)
         new_state.defense_values = np.copy(self.defense_values)
         new_state.defense_det = np.copy(self.defense_det)
-        new_state.reconnaissance_state = np.copy(self.reconnaissance_state)
+        # new_state.reconnaissance_state = np.copy(self.reconnaissance_state)
         new_state.attacker_pos = self.attacker_pos
         new_state.game_step = self.game_step
         new_state.attacker_cumulative_reward = self.attacker_cumulative_reward
@@ -222,234 +220,64 @@ class GameState:
         new_state.attack_defense_type = self.attack_defense_type
         new_state.num_hacks = self.num_hacks
         new_state.hacked = self.hacked
-        new_state.reconnaissance_actions = self.reconnaissance_actions
+        # new_state.reconnaissance_actions = self.reconnaissance_actions
         return new_state
 
-    def attack(self, node_id: int, attack_type: int, max_value: int, network_config: NetworkConfig,
-               reconnaissance_enabled : bool = False) -> None:
+    def attack(self, attack_type: int) -> None:
         """
-        Increments the attack value of the specified node and attack type
+        Implement this:
+        Select some sort of attack action and time duration
 
-        :param node_id: id of the node to defend
-        :param attack_type: the type of attack attribute to increment
-        :param max_value: the maximum defense value
-        :param network_config: NetworkConfig
-        :param reconnaissance_enabled: boolean flag indicating whether reconnaissance actions are enabled or not
+        :param attack_type: the type of attack action to execute
         :return: None
         """
-        if network_config.node_list[node_id] != NodeType.START and self.attack_values[node_id][attack_type] < max_value:
-            self.attack_values[node_id][attack_type] += 1
-        if reconnaissance_enabled:
-            if network_config.node_list[node_id] != NodeType.START and \
-                    self.attack_values[node_id][attack_type] > self.reconnaissance_state[node_id][attack_type]:
-                self.reconnaissance_state[node_id][attack_type] = self.attack_values[node_id][attack_type]
+        pass
 
-    def min_attack_type(self, node, row_ids):
-        min_val = float('inf')
-        for n in row_ids:
-            for at in range(self.defense_values.shape[1]):
-                val = self.defense_values[n][at]
-                if val <= min_val:
-                    min_val = val
-        min_ats = []
-        for at in range(self.defense_values.shape[1]):
-            val = self.defense_values[node][at]
-            if val <= min_val:
-                min_ats.append(at)
-        return min_ats
-
-
-    def reconnaissance(self, node_id: int, attack_type: int, reconnaissance_reward : bool = False) -> int:
+    def defend(self, defense_type: int) -> None:
         """
-        Performs a reconnaissance activity for the attacker
+        Implement this:
+        Raise the alarm or do nothing
+        Or some sort of remediation action
+        Or consider certain workloads as illegal
 
-        :param node_id: id of the node to defend
-        :param attack_type: the type of attack attribute to increment
-        :param max_value: the maximum defense value
-        :param network_config: NetworkConfig
-        :return: reward
+        :param defense_type: descriptor of defense class or approach?
         """
-        if reconnaissance_reward:
-            reward = -0.5 * constants.GAME_CONFIG.POSITIVE_REWARD \
-                if (self.reconnaissance_state[node_id] == self.defense_values[node_id]).all() \
-                else 0.5 * constants.GAME_CONFIG.POSITIVE_REWARD
-        else:
-            reward = 0
-        self.reconnaissance_state[node_id] = self.defense_values[node_id]
-        self.reconnaissance_actions.append(node_id)
-        return reward
+        pass
 
-    def defend(self, node_id: int, defense_type: int, max_value: int, network_config: NetworkConfig,
-               detect : bool = False) -> bool:
+    def simulate_attack(self, attack_type: int) -> bool:
         """
-        Increments the defense value of the specified node and defense type
-
-        :param node_id: id of the node to defend
-        :param defense_type: the type of defense attribute to increment
-        :param max_value: the maximum defense value
-        :param network_config: NetworkConfig
-        :param detect: True if it is a detect action otherwise False
-        :return: True if update had effect, otherwise False
-        """
-        if detect or defense_type >= self.defense_values.shape[1]:
-            if network_config.node_list[node_id] != NodeType.START and self.defense_det[node_id] < max_value:
-                self.defense_det[node_id] += 1
-                return True
-        else:
-            if network_config.node_list[node_id] != NodeType.START and \
-                    self.defense_values[node_id][defense_type] < max_value:
-                self.defense_values[node_id][defense_type] += 1
-                return True
-        return False
-
-    def simulate_attack(self, attacked_node_id: int, attack_type: int, network_config: NetworkConfig) -> bool:
-        """
-        Simulates an attack operation
+        Implement this:
 
         :param attacked_node_id: the id of the node that is attacked
         :param attack_type: the type of the attack
         :param network_config: NetworkConfig
         :return: True if the attack was successful otherwise False
         """
-        if network_config.node_list[attacked_node_id] == NodeType.START:
-            return True
-        return self.attack_values[attacked_node_id][attack_type] > self.defense_values[attacked_node_id][attack_type]
+        return True
 
-    def simulate_detection(self, node_id: int, reconnaissance: bool, reconnaissance_detection_factor : float = 1,
-                           np_random: np.random.Generator = None) -> bool:
+    def simulate_detection(self, node_id: int, np_random: np.random.Generator = None) -> bool:
         """
-        Simulates detection for a unsuccessful attack
+        Implement this:
 
         :param node_id: the id of the node to simulate deteciton of
         :param reconnaissance: boolean flag, if true simulate detection of reconnaissance activity
         :param np_random: random number generator
         :return: True if the node was detected, otherwise False
         """
-        if np_random is None:
-            np_random = np.random
-        if not reconnaissance:
-            if isinstance(np_random, np.random.Generator):
-                return np_random.random() < self.defense_det[node_id]/10
-            return np_random.rand() < self.defense_det[node_id]/10
-        else:
-            det_prob = (self.defense_det[node_id] / 10)*reconnaissance_detection_factor
-            if isinstance(np_random, np.random.Generator):
-                return np_random.random() < det_prob
-            return np_random.rand() < det_prob
+        return True
 
-    def get_attacker_observation(self, network_config: NetworkConfig, local_view=False, reconnaissance = False,
-                                 reconnaissance_bool_features = False) -> np.ndarray:
+    def get_attacker_observation(self, local_view=False) -> np.ndarray:
         """
         Converts the state of the dynamical system into an observation for the attacker. As the environment
         is a partially observed markov decision process, the attacker observation is only a subset of the game state
 
-        :param network_config: the network configuration of the game
         :param local_view: boolean flag indicating whether observations are provided in a local view or not
-        :param reconnaissance: boolean flag indicating whether reconnaissance states should be included
-        :param reconnaissance_bool_features: boolean flag whether to include boolean features that indicate if
-                                             reconnaissance have been done for a certain defense type
         :return: An observation of the environment
         """
-        if not reconnaissance:
-            # +1 to have an extra feature that indicates if this is the node that the attacker is currently in
-            attack_observation = np.zeros((len(network_config.node_list), self.attack_values.shape[1] + 1))
-        elif reconnaissance and not reconnaissance_bool_features:
-            # +1 to have an extra feature that indicates if this is the node that the attacker is currently in
-            attack_observation = np.zeros((len(network_config.node_list), (self.attack_values.shape[1]*2 + 1)))
-        else:
-            # +2 to have an extra feature that indicates if this is the node that the attacker is currently in and reconnaissance bool feature
-            attack_observation = np.zeros((len(network_config.node_list), (self.attack_values.shape[1] * 2 + 2)))
 
         current_pos = self.attacker_pos
-        current_node_id = network_config.get_node_id(current_pos)
         current_row, current_col = current_pos
-        current_adjacency_matrix_id = network_config.get_adjacency_matrix_id(current_row, current_col)
-
-        if local_view:
-            neighbors = []
-
-        for node_id in range(len(network_config.node_list)):
-            pos = network_config.get_node_pos(node_id)
-            node_row, node_col = pos
-            node_adjacency_matrix_id = network_config.get_adjacency_matrix_id(node_row, node_col)
-            if local_view:
-                if network_config.adjacency_matrix[current_adjacency_matrix_id][node_adjacency_matrix_id] \
-                        and node_id != current_node_id:
-                    if not reconnaissance:
-                        neighbor_data = np.append(self.attack_values[node_id], node_id)
-                    elif reconnaissance and not reconnaissance_bool_features:
-                        neighbor_data = np.append(np.append(self.attack_values[node_id], node_id), self.reconnaissance_state[node_id]),
-                    else:
-                        reconaissance_bool = [0]
-                        if node_id in self.reconnaissance_actions:
-                            reconaissance_bool = [1]
-                        neighbor_data = np.append(np.append(
-                            np.append(self.attack_values[node_id], node_id), self.reconnaissance_state[node_id]),
-                            reconaissance_bool)
-                    neighbor_row, neighbor_col = network_config.get_node_pos(node_id)
-                    neighbors.append((neighbor_row, neighbor_col, neighbor_data))
-            else:
-                if node_id == current_node_id:
-                    if not reconnaissance:
-                        attack_observation[node_id] = np.append(self.attack_values[node_id], 1)
-                    elif reconnaissance and not reconnaissance_bool_features:
-                        attack_observation[node_id] = np.append(np.append(self.attack_values[node_id], 1),
-                                                                self.reconnaissance_state[node_id])
-                    else:
-                        reconaissance_bool = [0]
-                        if node_id in self.reconnaissance_actions:
-                            reconaissance_bool = [1]
-                        attack_observation[node_id] = np.append(np.append(np.append(self.attack_values[node_id], 1),
-                                                                self.reconnaissance_state[node_id]), reconaissance_bool)
-                elif network_config.fully_observed:
-                    attack_observation[node_id] = np.append(self.attack_values[node_id], 0)
-                elif network_config.adjacency_matrix[current_adjacency_matrix_id][node_adjacency_matrix_id]:
-                    if not reconnaissance:
-                        attack_observation[node_id] = np.append(self.attack_values[node_id], 0)
-                    elif reconnaissance and not reconnaissance_bool_features:
-                        attack_observation[node_id] = np.append(np.append(self.attack_values[node_id], 0),
-                                                                self.reconnaissance_state[node_id])
-                    else:
-                        reconaissance_bool = [0]
-                        if node_id in self.reconnaissance_actions:
-                            reconaissance_bool = [1]
-                        attack_observation[node_id] = np.append(np.append(np.append(self.attack_values[node_id], 0),
-                                                                          self.reconnaissance_state[node_id]),
-                                                                reconaissance_bool)
-                elif reconnaissance:
-                    if not reconnaissance_bool_features:
-                        attack_values = np.zeros((self.attack_values.shape[1]))
-                        attack_observation[node_id] = np.append(np.append(attack_values, 0),
-                                                                self.reconnaissance_state[node_id])
-                    else:
-                        reconaissance_bool = [0]
-                        if node_id in self.reconnaissance_actions:
-                            reconaissance_bool = [1]
-                        attack_values = np.zeros((self.attack_values.shape[1]))
-                        attack_observation[node_id] = np.append(np.append(np.append(attack_values, 0),
-                                                                self.reconnaissance_state[node_id]), reconaissance_bool)
-
-        if local_view:
-            # sort by row then col
-            sorted_neighbors = sorted(neighbors, key=lambda x: (x[0], x[1]))
-            neighbor_data = np.array(list(map(lambda x: x[2], sorted_neighbors)))
-            neighbor_ids = neighbor_data[:,self.attack_values.shape[1]]
-            if not reconnaissance:
-                local_view_obs = np.full((network_config.max_neighbors, self.attack_values.shape[1] + 1), -1)
-            elif reconnaissance and not reconnaissance_bool_features:
-                local_view_obs = np.full((network_config.max_neighbors, self.attack_values.shape[1]*2 + 1), -1)
-            else:
-                local_view_obs = np.full((network_config.max_neighbors, self.attack_values.shape[1] * 2 + 2), -1)
-            for n in range(network_config.max_neighbors):
-                rel_neighbor_pos = network_config.relative_neighbor_positions[n]
-                neighbor_pos = (current_row + rel_neighbor_pos[0], current_col + rel_neighbor_pos[1])
-                for i in range(len(neighbor_ids)):
-                    node_id = neighbor_ids[i]
-                    node_pos = network_config.get_node_pos(node_id)
-                    if node_pos == neighbor_pos and node_pos[0] <= current_row:
-                        local_view_obs[n] = neighbor_data[i]
-            attack_observation = np.array(local_view_obs)
-        return attack_observation
+        return np.zeros(3)
 
     def get_attacker_node_from_observation(self, observation: np.ndarray, reconnaissance : bool = False) -> int:
         """
@@ -469,19 +297,16 @@ class GameState:
                     return node_id
         raise AssertionError("Could not find the node that the attacker is in")
 
-    def add_attack_event(self, target_pos: Union[int, int], attack_type: int, attacker_pos: Union[int, int],
-                         reconnaissance : bool = False) -> None:
+    def add_attack_event(self, target_pos: Union[int, int], attack_type: int, attacker_pos: Union[int, int]) -> None:
         """
         Adds an attack event to the state
 
         :param target_pos: position in the grid of the target node
         :param attack_type: the type of the attack
         :param attacker_pos: position of the attacker
-        :param reconnaissance: boolean flag indicating whether it is a reconnaissance event
         :return: None
         """
-        attack_event = AttackDefenseEvent(target_pos, attack_type, attacker_pos=attacker_pos,
-                                          reconnaissance=reconnaissance)
+        attack_event = AttackDefenseEvent(target_pos, attack_type, attacker_pos=attacker_pos)
         self.attack_events.append(attack_event)
 
     def add_defense_event(self, target_pos: Union[int, int], defense_type: int) -> None:
@@ -495,41 +320,14 @@ class GameState:
         defense_event = AttackDefenseEvent(target_pos, defense_type)
         self.defense_events.append(defense_event)
 
-    def get_defender_observation(self, network_config: NetworkConfig):
+    def get_defender_observation(self):
         """
         Converts the state of the dynamical system into an observation for the defender. As the environment
         is a partially observed markov decision process, the defender observation is only a subset of the game state
 
-        :param network_config: the network configuration of the game
         :return: An observation of the environment
         """
-        # +1 for the detection value
-        defense_observation = np.zeros((len(network_config.node_list), self.defense_values.shape[1] + 1))
-        for node_id in range(len(network_config.node_list)):
-            defense_observation[node_id] = np.append(self.defense_values[node_id], self.defense_det[node_id])
-        return defense_observation
-
-    def randomize_attacker_position(self, network_config : NetworkConfig, np_random: np.random.Generator = None):
-        if np_random is None:
-            np_random = np.random
-        temp_rows = list(range(1, network_config.num_rows))
-        temp_cols = list(range(0, network_config.num_cols))
-        positions = []
-        for r in temp_rows:
-            for c in temp_cols:
-                node_id = network_config.get_node_id((r, c))
-                if network_config.node_list[node_id] == NodeType.SERVER.value \
-                        or network_config.node_list[node_id] == NodeType.START.value:
-                    positions.append((r, c))
-        if isinstance(np_random, np.random.Generator):
-            rnd_idx = np_random.integers(0, len(positions))
-        else:
-            rnd_idx = np.random.choice(list(range(len(positions))))
-        rnd_pos = positions[rnd_idx]
-        id = network_config.get_node_id(rnd_pos)
-        if network_config.node_list[id] == NodeType.START.value:
-            rnd_pos = network_config.start_pos
-        self.attacker_pos = rnd_pos
+        return None
 
     def restart(self) -> None:
         """
