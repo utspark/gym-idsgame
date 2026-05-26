@@ -332,7 +332,7 @@ class GameState:
     def restart(self) -> None:
         """
         Resets the game state, clears up all the history
-        :return: Noen
+        :return: None
         """
         self.num_games = 0
         self.num_hacks = 0

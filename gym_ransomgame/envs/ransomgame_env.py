@@ -1,7 +1,12 @@
 import gymnasium as gym
-from abc import ABC, abstractmethod
+import math
+import numpy as np
 
-from gym_idsgame.envs_ransom.dao_ransom.ransomgame_config import RansomGameConfig
+from typing import Union
+from abc import ABC, abstractmethod
+from gym_idsgame.envs.constants import constants
+from gym_ransomgame.envs.dao.game_config import GameConfig
+from gym_ransomgame.envs.dao.game_state import GameState
 
 
 class RansomGameEnv(gym.Env, ABC):
@@ -13,7 +18,7 @@ class RansomGameEnv(gym.Env, ABC):
     victim system while a defender agent attempts to defend the system.
     """
 
-    def __init__(self, idsgame_config: RansomGameConfig = None, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: GameConfig = None, save_dir: str = None, initial_state_path: str = None):
         """
         Initializes the environment
 
@@ -28,21 +33,20 @@ class RansomGameEnv(gym.Env, ABC):
         Episode Termination:
             When attacker reaches DATA node or when attacker is detected
 
-        :param idsgame_config: configuration of the environment
+        :param ransomgame_config: configuration of the environment
         :param save_dir: directory to save outputs, e.g. initial state
         :param initial_state_path: path to the initial state (if none, use default)
         """
-        import gym_idsgame.envs.util.idsgame_util as util
-        if idsgame_config is None:
-            idsgame_config = RansomGameConfig(initial_state_path=initial_state_path)
+        if ransomgame_config is None:
+            ransomgame_config = GameConfig(initial_state_path=initial_state_path)
         self.save_dir = save_dir
-        self.validate_config(idsgame_config)
-        self.idsgame_config: RansomGameConfig = idsgame_config
-        self.state: GameState = self.idsgame_config.game_config.initial_state.copy()
-        self.observation_space = self.idsgame_config.game_config.get_attacker_observation_space()
-        self.action_space = self.idsgame_config.game_config.get_action_space(defender=False)
-        self.attacker_action_space = self.idsgame_config.game_config.get_action_space(defender=False)
-        self.defender_action_space = self.idsgame_config.game_config.get_action_space(defender=True)
+        self.validate_config(ransomgame_config)
+        self.ransomgame_config: GameConfig = ransomgame_config
+        self.state: GameState = self.ransomgame_config.game_config.initial_state.copy()
+        self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
+        self.action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
+        self.attacker_action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
+        self.defender_action_space = self.ransomgame_config.game_config.get_action_space(defender=True)
         self.viewer = None
         self.steps_beyond_done = None
         self.metadata = {
@@ -54,22 +58,18 @@ class RansomGameEnv(gym.Env, ABC):
         import gymnasium as gym
         self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
-        self.num_states = self.idsgame_config.game_config.num_nodes
-        self.num_states_full = int(math.pow(self.idsgame_config.game_config.max_value+1,
-                                        self.idsgame_config.game_config.num_nodes*
-                                        (self.idsgame_config.game_config.num_attack_types+1)))
-        if self.idsgame_config.game_config.network_config.fully_observed:
-            self.num_states_full = int(math.pow(self.idsgame_config.game_config.max_value+1,
-                                            self.idsgame_config.game_config.num_nodes *
-                                            (self.idsgame_config.game_config.num_attack_types+1)* 2))
-        self.num_attack_actions = self.idsgame_config.game_config.num_attack_actions
-        self.num_defense_actions = self.idsgame_config.game_config.num_defense_actions
+        self.num_states = self.ransomgame_config.game_config.num_nodes
+        self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1,
+                                            self.ransomgame_config.game_config.num_nodes *
+                                            (self.ransomgame_config.game_config.num_attack_types + 1)))
+        if self.ransomgame_config.game_config.network_config.fully_observed:
+            self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1,
+                                                self.ransomgame_config.game_config.num_nodes *
+                                                (self.ransomgame_config.game_config.num_attack_types + 1) * 2))
+        self.num_attack_actions = self.ransomgame_config.game_config.num_attack_actions
+        self.num_defense_actions = self.ransomgame_config.game_config.num_defense_actions
         self.past_moves = []
-        self.past_positions = []
-        self.past_positions.append(self.state.attacker_pos)
-        self.past_reconnaissance_activities = []
         self.save_initial_state()
-        self.furthest_hack = self.idsgame_config.game_config.network_config.num_rows-1
         self.a_cumulative_reward = 0
         self.d_cumulative_reward = 0
         self.game_trajectories = []
@@ -78,7 +78,6 @@ class RansomGameEnv(gym.Env, ABC):
         self.total_attacks = []
         self.defenses = []
         self.attacks = []
-        self.hacked_nodes = []
         self.num_failed_attacks = 0
         self.failed_attacks = {}
 
@@ -124,23 +123,23 @@ class RansomGameEnv(gym.Env, ABC):
         trajectory.append([defense_node_id, defense_pos, defense_type])
 
         # 3. Defend
-        detect = defense_type == self.idsgame_config.game_config.num_attack_types
-        defense_successful = self.state.defend(defense_node_id, defense_type, self.idsgame_config.game_config.max_value,
-                          self.idsgame_config.game_config.network_config, detect=detect)
+        detect = defense_type == self.ransomgame_config.game_config.num_attack_types
+        defense_successful = self.state.defend(defense_node_id, defense_type, self.ransomgame_config.game_config.max_value,
+                                               self.ransomgame_config.game_config.network_config, detect=detect)
         if defense_successful:
             self.defenses.append((defense_node_id, defense_type, detect, self.state.game_step))
         self.state.add_defense_event(defense_pos, defense_type)
 
-        if attack_action != -1 and util.is_attack_legal(target_pos, attacker_pos, self.idsgame_config.game_config.network_config,
+        if attack_action != -1 and util.is_attack_legal(target_pos, attacker_pos, self.ransomgame_config.game_config.network_config,
                                 past_positions=self.past_positions):
             self.past_moves.append(target_node_id)
             if not reconnaissance:
                 # 4. Attack
-                self.state.attack(target_node_id, attack_type, self.idsgame_config.game_config.max_value,
-                                  self.idsgame_config.game_config.network_config,
-                                  reconnaissance_enabled=self.idsgame_config.reconnaissance_actions)
+                self.state.attack(target_node_id, attack_type, self.ransomgame_config.game_config.max_value,
+                                  self.ransomgame_config.game_config.network_config,
+                                  reconnaissance_enabled=self.ransomgame_config.reconnaissance_actions)
             else:
-                rec_reward = self.state.reconnaissance(target_node_id, attack_type, reconnaissance_reward=self.idsgame_config.reconnaissance_reward)
+                rec_reward = self.state.reconnaissance(target_node_id, attack_type, reconnaissance_reward=self.ransomgame_config.reconnaissance_reward)
                 self.past_reconnaissance_activities.append((target_node_id, attack_type))
                 reward = (rec_reward, 0)
 
@@ -151,8 +150,8 @@ class RansomGameEnv(gym.Env, ABC):
             if not reconnaissance:
                 # 5. Simulate attack outcome
                 attack_successful = self.state.simulate_attack(target_node_id, attack_type,
-                                                               self.idsgame_config.game_config.network_config)
-            if self.idsgame_config.save_attack_stats:
+                                                               self.ransomgame_config.game_config.network_config)
+            if self.ransomgame_config.save_attack_stats:
                 self.total_attacks.append([target_node_id, attack_successful, reconnaissance])
 
             # 6. Update state based on attack outcome
@@ -162,7 +161,7 @@ class RansomGameEnv(gym.Env, ABC):
                     self.past_positions.append(target_pos)
                     self.state.attacker_pos = target_pos
                     self.hacked_nodes.append(target_node_id)
-                    if target_pos == self.idsgame_config.game_config.network_config.data_pos:
+                    if target_pos == self.ransomgame_config.game_config.network_config.data_pos:
                         self.state.done = True
                         self.state.hacked = True
                         reward = self.get_hack_reward(attack_type, target_node_id)
@@ -177,7 +176,7 @@ class RansomGameEnv(gym.Env, ABC):
                     self.failed_attacks[(target_node_id, attack_type)] = 1
                 self.past_positions.append(self.state.attacker_pos)
                 detected = self.state.simulate_detection(target_node_id, reconnaissance=reconnaissance,
-                                                         reconnaissance_detection_factor=self.idsgame_config.reconnaissance_detection_factor,
+                                                         reconnaissance_detection_factor=self.ransomgame_config.reconnaissance_detection_factor,
                                                          np_random=self.np_random)
                 if detected:
                     self.state.done = True
@@ -186,7 +185,7 @@ class RansomGameEnv(gym.Env, ABC):
                 # else:
                 #     if not reconnaissance:
                 #         reward = self.get_blocked_attack_reward(target_node_id, attack_type)
-                if self.idsgame_config.save_attack_stats:
+                if self.ransomgame_config.save_attack_stats:
                     self.attack_detections.append([target_node_id, detected, self.state.defense_det[target_node_id]])
         else:
             #print("illegal action:{}".format(attack_action))
@@ -212,7 +211,7 @@ class RansomGameEnv(gym.Env, ABC):
         trajectory.append(reward[0])
         trajectory.append(reward[1])
         trajectory.append(self.state)
-        if self.idsgame_config.save_trajectories:
+        if self.ransomgame_config.save_trajectories:
             self.game_trajectories.append(trajectory)
         return observation, reward, self.state.done, False, info
 
@@ -231,34 +230,34 @@ class RansomGameEnv(gym.Env, ABC):
         self.action_space.seed(seed)
         self.attacker_action_space.seed(seed)
         self.defender_action_space.seed(seed)
-        if self.idsgame_config.attacker_agent is not None:
-            self.idsgame_config.attacker_agent.np_random = self.np_random
-        if self.idsgame_config.defender_agent is not None:
-            self.idsgame_config.defender_agent.np_random = self.np_random
+        if self.ransomgame_config.attacker_agent is not None:
+            self.ransomgame_config.attacker_agent.np_random = self.np_random
+        if self.ransomgame_config.defender_agent is not None:
+            self.ransomgame_config.defender_agent.np_random = self.np_random
         self.past_moves = []
         self.past_positions = []
         self.past_reconnaissance_activities = []
         self.failed_attacks = {}
-        self.furthest_hack = self.idsgame_config.game_config.network_config.num_rows-1
+        self.furthest_hack = self.ransomgame_config.game_config.network_config.num_rows - 1
         self.steps_beyond_done = None
-        self.state.new_game(self.idsgame_config.game_config.initial_state, self.a_cumulative_reward,
+        self.state.new_game(self.ransomgame_config.game_config.initial_state, self.a_cumulative_reward,
                             self.d_cumulative_reward, update_stats=update_stats,
-                            randomize_state=self.idsgame_config.randomize_env,
-                            network_config=self.idsgame_config.game_config.network_config,
-                            num_attack_types=self.idsgame_config.game_config.num_attack_types,
-                            defense_val = self.idsgame_config.game_config.defense_val,
-                            attack_val = self.idsgame_config.game_config.attack_val,
-                            det_val = self.idsgame_config.game_config.det_val,
-                            vulnerability_val = self.idsgame_config.game_config.vulnerabilitiy_val,
-                            num_vulnerabilities_per_layer=self.idsgame_config.game_config.num_vulnerabilities_per_node,
-                            num_vulnerabilities_per_node=self.idsgame_config.game_config.num_vulnerabilities_per_node,
-                            randomize_visibility=self.idsgame_config.randomize_visibility,
-                            visibility_p=self.idsgame_config.visibility_p,
+                            randomize_state=self.ransomgame_config.randomize_env,
+                            network_config=self.ransomgame_config.game_config.network_config,
+                            num_attack_types=self.ransomgame_config.game_config.num_attack_types,
+                            defense_val = self.ransomgame_config.game_config.defense_val,
+                            attack_val = self.ransomgame_config.game_config.attack_val,
+                            det_val = self.ransomgame_config.game_config.det_val,
+                            vulnerability_val = self.ransomgame_config.game_config.vulnerabilitiy_val,
+                            num_vulnerabilities_per_layer=self.ransomgame_config.game_config.num_vulnerabilities_per_node,
+                            num_vulnerabilities_per_node=self.ransomgame_config.game_config.num_vulnerabilities_per_node,
+                            randomize_visibility=self.ransomgame_config.randomize_visibility,
+                            visibility_p=self.ransomgame_config.visibility_p,
                             np_random=self.np_random)
         self.a_cumulative_reward = 0
         self.d_cumulative_reward = 0
-        if self.idsgame_config.randomize_starting_position:
-            self.state.randomize_attacker_position(self.idsgame_config.game_config.network_config, np_random=self.np_random)
+        if self.ransomgame_config.randomize_starting_position:
+            self.state.randomize_attacker_position(self.ransomgame_config.game_config.network_config, np_random=self.np_random)
         if self.viewer is not None:
             self.viewer.gameframe.reset()
         observation = self.get_observation()
@@ -313,7 +312,7 @@ class RansomGameEnv(gym.Env, ABC):
         if self.viewer:
             self.viewer.close()
             self.viewer = None
-            self.idsgame_config.render_config.new_window()
+            self.ransomgame_config.render_config.new_window()
 
     def get_attacker_node_from_observation(self, observation: np.ndarray) -> int:
         """
@@ -323,7 +322,7 @@ class RansomGameEnv(gym.Env, ABC):
         :return: the id of the node that the attacker is in
         """
         return self.state.get_attacker_node_from_observation(
-            observation, reconnaissance=self.idsgame_config.game_config.reconnaissance_actions)
+            observation, reconnaissance=self.ransomgame_config.game_config.reconnaissance_actions)
 
     def hack_probability(self) -> float:
         """
@@ -342,7 +341,7 @@ class RansomGameEnv(gym.Env, ABC):
         :return: True if legal otherwise False
         """
         import gym_idsgame.envs.util.idsgame_util as util
-        return util.is_attack_id_legal(attack_action, self.idsgame_config.game_config, self.state.attacker_pos,
+        return util.is_attack_id_legal(attack_action, self.ransomgame_config.game_config, self.state.attacker_pos,
                                        self.state, self.past_positions,
                                        past_reconnaissance_activities = self.past_reconnaissance_activities)
 
@@ -354,7 +353,7 @@ class RansomGameEnv(gym.Env, ABC):
         :return: True if legal otherwise False
         """
         import gym_idsgame.envs.util.idsgame_util as util
-        return util.is_defense_id_legal(defense_action, self.idsgame_config.game_config, self.state)
+        return util.is_defense_id_legal(defense_action, self.ransomgame_config.game_config, self.state)
 
     def save_initial_state(self) -> None:
         """
@@ -375,7 +374,7 @@ class RansomGameEnv(gym.Env, ABC):
         suffix = ".pkl"
         if checkpoint:
             suffix = "_checkpoint.pkl"
-        if self.idsgame_config.save_trajectories:
+        if self.ransomgame_config.save_trajectories:
             path = self.save_dir
             time_str = str(time.time())
             filehandler = open(path + "/trajectories_" + time_str + suffix, 'wb')
@@ -393,7 +392,7 @@ class RansomGameEnv(gym.Env, ABC):
         suffix = ".csv"
         if checkpoint:
             suffix = "_checkpoint.csv"
-        if self.idsgame_config.save_attack_stats:
+        if self.ransomgame_config.save_attack_stats:
             time_str = str(time.time())
             with open(self.save_dir + "/attack_detections_stats_" + time_str + suffix, "w") as f:
                 writer = csv.writer(f)
@@ -416,10 +415,10 @@ class RansomGameEnv(gym.Env, ABC):
         :return: (attacker_reward, defender_reward)
         """
         import gym_idsgame.envs.util.idsgame_util as util
-        if not self.idsgame_config.game_config.dense_rewards and not self.idsgame_config.game_config.dense_rewards_v2 \
-                and not self.idsgame_config.game_config.dense_rewards_v3:
+        if not self.ransomgame_config.game_config.dense_rewards and not self.ransomgame_config.game_config.dense_rewards_v2 \
+                and not self.ransomgame_config.game_config.dense_rewards_v3:
             return constants.GAME_CONFIG.POSITIVE_REWARD, -constants.GAME_CONFIG.POSITIVE_REWARD
-        elif self.idsgame_config.game_config.dense_rewards_v3:
+        elif self.ransomgame_config.game_config.dense_rewards_v3:
             missed_defense = 0
             for defense in self.defenses:
                 match = False
@@ -430,15 +429,15 @@ class RansomGameEnv(gym.Env, ABC):
                         match = True
                 if not match:
                     missed_defense += 1
-            defense_score = util.defense_score(self.state, self.idsgame_config.game_config.network_config,
-                                        self.idsgame_config.game_config)
-            reference_defense_score = util.defense_score(self.idsgame_config.game_config.initial_state,
-                                          self.idsgame_config.game_config.network_config,
-                                          self.idsgame_config.game_config)
-            max_defense_score = self.idsgame_config.game_config.max_value * self.idsgame_config.game_config.network_config.num_rows
+            defense_score = util.defense_score(self.state, self.ransomgame_config.game_config.network_config,
+                                               self.ransomgame_config.game_config)
+            reference_defense_score = util.defense_score(self.ransomgame_config.game_config.initial_state,
+                                                         self.ransomgame_config.game_config.network_config,
+                                                         self.ransomgame_config.game_config)
+            max_defense_score = self.ransomgame_config.game_config.max_value * self.ransomgame_config.game_config.network_config.num_rows
 
             attack_row, attack_col = self.state.attacker_pos
-            row_ids = self.idsgame_config.game_config.network_config.get_row_ids(attack_row)
+            row_ids = self.ransomgame_config.game_config.network_config.get_row_ids(attack_row)
             min_ats = self.state.min_attack_type(node_id, row_ids)
             if node_id in self.state.reconnaissance_actions and attack_type in min_ats:
                 num_good_attacks = 1
@@ -465,12 +464,12 @@ class RansomGameEnv(gym.Env, ABC):
         :return: (attacker_reward, defender_reward)
         """
         import gym_idsgame.envs.util.idsgame_util as util
-        if not self.idsgame_config.game_config.dense_rewards and not self.idsgame_config.game_config.dense_rewards_v2 \
-                and not self.idsgame_config.game_config.dense_rewards_v3:
+        if not self.ransomgame_config.game_config.dense_rewards and not self.ransomgame_config.game_config.dense_rewards_v2 \
+                and not self.ransomgame_config.game_config.dense_rewards_v3:
             return -constants.GAME_CONFIG.POSITIVE_REWARD, constants.GAME_CONFIG.POSITIVE_REWARD
-        elif self.idsgame_config.game_config.dense_rewards and self.idsgame_config.game_config.dense_rewards_v2:
+        elif self.ransomgame_config.game_config.dense_rewards and self.ransomgame_config.game_config.dense_rewards_v2:
             return -100*constants.GAME_CONFIG.POSITIVE_REWARD, 100*constants.GAME_CONFIG.POSITIVE_REWARD
-        elif self.idsgame_config.game_config.dense_rewards_v3:
+        elif self.ransomgame_config.game_config.dense_rewards_v3:
             missed_defense = 0
             for defense in self.defenses:
                 match = False
@@ -483,7 +482,7 @@ class RansomGameEnv(gym.Env, ABC):
                     missed_defense += 1
 
             attack_row, attack_col = self.state.attacker_pos
-            row_ids = self.idsgame_config.game_config.network_config.get_row_ids(attack_row)
+            row_ids = self.ransomgame_config.game_config.network_config.get_row_ids(attack_row)
             min_ats = self.state.min_attack_type(target_node_id, row_ids)
 
             added_defense = 0
@@ -493,10 +492,10 @@ class RansomGameEnv(gym.Env, ABC):
                 if not defense[2] and defense[1] == attack_type and defense[0] == target_node_id:
                     added_defense += 1
 
-            defense_score = util.defense_score(self.state, self.idsgame_config.game_config.network_config, self.idsgame_config.game_config)
-            reference_defense_score = util.defense_score(self.idsgame_config.game_config.initial_state,
-                                                         self.idsgame_config.game_config.network_config,
-                                                         self.idsgame_config.game_config)
+            defense_score = util.defense_score(self.state, self.ransomgame_config.game_config.network_config, self.ransomgame_config.game_config)
+            reference_defense_score = util.defense_score(self.ransomgame_config.game_config.initial_state,
+                                                         self.ransomgame_config.game_config.network_config,
+                                                         self.ransomgame_config.game_config)
             if not reconnaissance and target_node_id in self.state.reconnaissance_actions and attack_type in min_ats:
                 return 0, (defense_score-reference_defense_score)
             else:
@@ -536,10 +535,10 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return:(attacker_reward, defender_reward)
         """
-        if not self.idsgame_config.game_config.dense_rewards and not self.idsgame_config.game_config.dense_rewards_v2 \
-                and not self.idsgame_config.game_config.dense_rewards_v3:
+        if not self.ransomgame_config.game_config.dense_rewards and not self.ransomgame_config.game_config.dense_rewards_v2 \
+                and not self.ransomgame_config.game_config.dense_rewards_v3:
             return 0, 0
-        elif self.idsgame_config.game_config.dense_rewards and self.idsgame_config.game_config.dense_rewards_v2:
+        elif self.ransomgame_config.game_config.dense_rewards and self.ransomgame_config.game_config.dense_rewards_v2:
             attack_row, attack_col = self.state.attacker_pos
             if attack_row < self.furthest_hack:
                 self.furthest_hack = attack_row
@@ -547,9 +546,9 @@ class RansomGameEnv(gym.Env, ABC):
             elif attack_row > self.furthest_hack:
                 return -constants.GAME_CONFIG.POSITIVE_REWARD, constants.GAME_CONFIG.POSITIVE_REWARD
             return 0,0
-        elif self.idsgame_config.game_config.dense_rewards_v3:
+        elif self.ransomgame_config.game_config.dense_rewards_v3:
             attack_row, attack_col = self.state.attacker_pos
-            row_ids = self.idsgame_config.game_config.network_config.get_row_ids(attack_row)
+            row_ids = self.ransomgame_config.game_config.network_config.get_row_ids(attack_row)
             min_ats = self.state.min_attack_type(node_id, row_ids)
             if node_id in self.state.reconnaissance_actions and attack_type in min_ats:
                 num_good_attacks = 1
@@ -569,10 +568,10 @@ class RansomGameEnv(gym.Env, ABC):
             if attack_row < self.furthest_hack:
                 self.furthest_hack = attack_row
                 extra_reward = 0
-                if self.idsgame_config.extra_reconnaissance_reward:
+                if self.ransomgame_config.extra_reconnaissance_reward:
                     for rec_act in self.past_reconnaissance_activities:
                         node_id, rec_type = rec_act
-                        server_id = self.idsgame_config.game_config.network_config.get_node_id(self.state.attacker_pos)
+                        server_id = self.ransomgame_config.game_config.network_config.get_node_id(self.state.attacker_pos)
                         if node_id == server_id:
                             extra_reward = 1
                 return bonus + extra_reward + constants.GAME_CONFIG.POSITIVE_REWARD, 0
@@ -601,9 +600,9 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return:(attacker_reward, defender_reward)
         """
-        if not self.idsgame_config.game_config.dense_rewards and not self.idsgame_config.game_config.dense_rewards_v2:
+        if not self.ransomgame_config.game_config.dense_rewards and not self.ransomgame_config.game_config.dense_rewards_v2:
             return 0, 0
-        elif self.idsgame_config.game_config.dense_rewards and not self.idsgame_config.game_config.dense_rewards_v2:
+        elif self.ransomgame_config.game_config.dense_rewards and not self.ransomgame_config.game_config.dense_rewards_v2:
             return 0, 0
         else:
             upd_defenses = []
@@ -627,10 +626,10 @@ class RansomGameEnv(gym.Env, ABC):
         :return: (attacker_obs, defender_obs)
         """
         attacker_obs = self.state.get_attacker_observation(
-            self.idsgame_config.game_config.network_config, local_view=self.idsgame_config.local_view_observations,
-            reconnaissance=self.idsgame_config.game_config.reconnaissance_actions,
-        reconnaissance_bool_features=self.idsgame_config.reconnaissance_bool_features)
-        defender_obs = self.state.get_defender_observation(self.idsgame_config.game_config.network_config)
+            self.ransomgame_config.game_config.network_config, local_view=self.ransomgame_config.local_view_observations,
+            reconnaissance=self.ransomgame_config.game_config.reconnaissance_actions,
+        reconnaissance_bool_features=self.ransomgame_config.reconnaissance_bool_features)
+        defender_obs = self.state.get_defender_observation(self.ransomgame_config.game_config.network_config)
         return attacker_obs, defender_obs
 
     def fully_observed(self) -> bool:
@@ -639,7 +638,7 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return: True if the environment is fully observed, otherwise false
         """
-        return self.idsgame_config.game_config.network_config.fully_observed
+        return self.ransomgame_config.game_config.network_config.fully_observed
 
     def local_view_features(self) -> bool:
         """
@@ -647,11 +646,11 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return: True if the environment uses local view observations
         """
-        return self.idsgame_config.local_view_observations
+        return self.ransomgame_config.local_view_observations
 
     def is_reconnaissance(self, action):
         import gym_idsgame.envs.util.idsgame_util as util
-        server_id, server_pos, attack_type, reconnaissance = util.interpret_attack_action(action, self.idsgame_config.game_config)
+        server_id, server_pos, attack_type, reconnaissance = util.interpret_attack_action(action, self.ransomgame_config.game_config)
         return reconnaissance
         # if server_id not in self.state.reconnaissance_actions:
         #     #print("server_id:{}, rec actions:{}".format(server_id, self.state.reconnaissance_actions))
@@ -678,8 +677,8 @@ class RansomGameEnv(gym.Env, ABC):
         from gym_idsgame.envs.rendering.viewer import Viewer
         script_dir = os.path.dirname(__file__)
         resource_path = os.path.join(script_dir, './rendering/', constants.RENDERING.RESOURCES_DIR)
-        self.idsgame_config.render_config.resources_dir = resource_path
-        self.viewer = Viewer(idsgame_config=self.idsgame_config)
+        self.ransomgame_config.render_config.resources_dir = resource_path
+        self.viewer = Viewer(idsgame_config=self.ransomgame_config)
         self.viewer.agent_start()
 
     def _build_state_to_idx_map(self):
@@ -688,14 +687,14 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return: the lookup map
         """
-        n_state_elems = self.idsgame_config.game_config.num_nodes * \
-                        (self.idsgame_config.game_config.num_attack_types + 1)
-        if self.idsgame_config.game_config.network_config.fully_observed:
-            n_state_elems = self.idsgame_config.game_config.num_nodes * \
-                            (self.idsgame_config.game_config.num_attack_types + 1) * 2
+        n_state_elems = self.ransomgame_config.game_config.num_nodes * \
+                        (self.ransomgame_config.game_config.num_attack_types + 1)
+        if self.ransomgame_config.game_config.network_config.fully_observed:
+            n_state_elems = self.ransomgame_config.game_config.num_nodes * \
+                            (self.ransomgame_config.game_config.num_attack_types + 1) * 2
         states = list(
-            itertools.product(list(range(self.idsgame_config.game_config.max_value + 1)), repeat=n_state_elems))
-        assert int(len(states)) == int(math.pow(self.idsgame_config.game_config.max_value + 1, n_state_elems))
+            itertools.product(list(range(self.ransomgame_config.game_config.max_value + 1)), repeat=n_state_elems))
+        assert int(len(states)) == int(math.pow(self.ransomgame_config.game_config.max_value + 1, n_state_elems))
         state_to_idx = {}
         for idx, s in enumerate(states):
             state_to_idx[s] = idx
@@ -710,31 +709,31 @@ class AttackerEnv(RansomGameEnv, ABC):
     attacker-agent should inherit this class
     """
 
-    def __init__(self, idsgame_config: IdsGameConfig, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: IdsGameConfig, save_dir: str = None, initial_state_path: str = None):
         """
         Initialization of the environment
 
         :param save_dir: directory to save outputs of the env
         :param initial_state_path: path to the initial state (if none, use default)
-        :param idsgame_config: configuration of the environment (if not specified a default config is used)
+        :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
-        if idsgame_config is None:
+        if ransomgame_config is None:
             raise ValueError("Cannot instantiate env without configuration")
-        if idsgame_config.defender_agent is None:
+        if ransomgame_config.defender_agent is None:
             raise ValueError("Cannot instantiate attacker-env without a defender agent")
-        super().__init__(idsgame_config=idsgame_config, save_dir=save_dir, initial_state_path=initial_state_path)
-        self.observation_space = self.idsgame_config.game_config.get_attacker_observation_space()
+        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir, initial_state_path=initial_state_path)
+        self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
         import gym_idsgame.envs.util.idsgame_util as util
         attacker_action, _ = action
-        return util.interpret_attack_action(attacker_action, self.idsgame_config.game_config)
+        return util.interpret_attack_action(attacker_action, self.ransomgame_config.game_config)
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
         import gym_idsgame.envs.util.idsgame_util as util
-        defend_id = self.idsgame_config.defender_agent.action(self.state)
+        defend_id = self.ransomgame_config.defender_agent.action(self.state)
         defend_node_id, defend_node_pos, defend_type = util.interpret_defense_action(
-            defend_id, self.idsgame_config.game_config)
+            defend_id, self.ransomgame_config.game_config)
         return defend_node_id, defend_node_pos, defend_type
 
 class IdsGameMinimalDefenseV0Env(AttackerEnv):
@@ -749,22 +748,22 @@ class IdsGameMinimalDefenseV0Env(AttackerEnv):
     [Reconnaissance activities] disabled
     [Reconnaissance bool features] No
     """
-    def __init__(self, idsgame_config: IdsGameConfig = None, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: IdsGameConfig = None, save_dir: str = None, initial_state_path: str = None):
         """
         Initialization of the environment
 
         :param save_dir: directory to save outputs of the env
         :param initial_state_path: path to the initial state (if none, use default)
-        :param idsgame_config: configuration of the environment (if not specified a default config is used)
+        :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
         from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import DefendMinimalValueBotAgent
-        if idsgame_config is None:
+        if ransomgame_config is None:
             game_config = GameConfig(num_layers=1, num_servers_per_layer=1, num_attack_types=10, max_value=9)
             game_config.set_initial_state(defense_val=2, attack_val=0, num_vulnerabilities_per_node=1, det_val=2,
                                           vulnerability_val=0, num_vulnerabilities_per_layer=1)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
             defender_agent = DefendMinimalValueBotAgent(game_config)
-            idsgame_config = IdsGameConfig(game_config=game_config, defender_agent=defender_agent)
-            idsgame_config.render_config.caption = "idsgame-minimal_defense-v0"
-        super().__init__(idsgame_config=idsgame_config, save_dir=save_dir)
+            ransomgame_config = IdsGameConfig(game_config=game_config, defender_agent=defender_agent)
+            ransomgame_config.render_config.caption = "idsgame-minimal_defense-v0"
+        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir)

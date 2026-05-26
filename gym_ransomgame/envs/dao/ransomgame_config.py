@@ -2,12 +2,12 @@
 Configuration for the ransomgame environment
 """
 from gym_idsgame.envs.dao.render_config import RenderConfig
-from gym_idsgame.envs.dao.game_config import GameConfig
+from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_idsgame.agents.agent import Agent
 
 class RansomGameConfig:
     """
-    DTO representing the configuration of the IdsGameEnv:
+    DTO representing the configuration of the RansomGameEnv:
     """
 
     def __init__(
@@ -51,7 +51,7 @@ class RansomGameConfig:
         if self.render_config is None:
             self.render_config = RenderConfig()
         if self.game_config is None:
-            self.game_config = GameConfig(initial_state_path=initial_state_path)
+            self.game_config = RansomGameConfig(initial_state_path=initial_state_path)
         self.render_config.set_height(self.game_config.num_rows)
         self.render_config.set_width(self.game_config.num_cols)
         # self.save_trajectories = save_trajectories
