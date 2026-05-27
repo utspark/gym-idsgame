@@ -17,7 +17,7 @@ class RansomGameConfig:
         defender_agent: Agent = None,
         attacker_agent: Agent = None,
         initial_state_path: str = None,
-        # save_trajectories :bool = False,
+        save_trajectories :bool = False,
         save_attack_stats : bool = False,
         randomize_env : bool = False,
         local_view_observations : bool = False,
@@ -54,7 +54,7 @@ class RansomGameConfig:
             self.game_config = RansomGameConfig(initial_state_path=initial_state_path)
         self.render_config.set_height(self.game_config.num_rows)
         self.render_config.set_width(self.game_config.num_cols)
-        # self.save_trajectories = save_trajectories
+        self.save_trajectories = save_trajectories
         self.save_attack_stats = save_attack_stats
         self.randomize_env = randomize_env
         self.local_view_observations = local_view_observations

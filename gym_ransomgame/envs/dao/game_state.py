@@ -4,6 +4,9 @@ Stateful data of the gym-ransomgame environment
 from typing import Union, List
 import numpy as np
 import pickle
+
+from uno import Bool
+
 from gym_idsgame.envs.dao.node_type import NodeType
 from gym_idsgame.envs.constants import constants
 from gym_idsgame.envs.dao.attack_defense_event import AttackDefenseEvent
@@ -208,7 +211,6 @@ class GameState:
         new_state.defense_values = np.copy(self.defense_values)
         new_state.defense_det = np.copy(self.defense_det)
         # new_state.reconnaissance_state = np.copy(self.reconnaissance_state)
-        new_state.attacker_pos = self.attacker_pos
         new_state.game_step = self.game_step
         new_state.attacker_cumulative_reward = self.attacker_cumulative_reward
         new_state.defender_cumulative_reward = self.defender_cumulative_reward
@@ -233,7 +235,7 @@ class GameState:
         """
         pass
 
-    def defend(self, defense_type: int) -> None:
+    def defend(self, defense_type: int) -> bool:
         """
         Implement this:
         Raise the alarm or do nothing
@@ -242,7 +244,7 @@ class GameState:
 
         :param defense_type: descriptor of defense class or approach?
         """
-        pass
+        return True
 
     def simulate_attack(self, attack_type: int) -> bool:
         """
@@ -275,8 +277,6 @@ class GameState:
         :return: An observation of the environment
         """
 
-        current_pos = self.attacker_pos
-        current_row, current_col = current_pos
         return np.zeros(3)
 
     def get_attacker_node_from_observation(self, observation: np.ndarray, reconnaissance : bool = False) -> int:
