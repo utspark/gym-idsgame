@@ -1,4 +1,5 @@
 import csv
+import itertools
 import os
 import pickle
 import time
@@ -10,6 +11,7 @@ import numpy as np
 from typing import Union
 from abc import ABC, abstractmethod
 from gym_idsgame.envs.constants import constants
+from gym_ransomgame.envs.rendering.viewer import Viewer
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_ransomgame.envs.dao.game_state import GameState
 from gym_ransomgame.envs.dao.ransomgame_config import RansomGameConfig
@@ -424,14 +426,18 @@ class RansomGameEnv(gym.Env, ABC):
         Setup for the viewer to use for rendering
         :return: None
         """
-        from gym_idsgame.envs.rendering.viewer import Viewer
+
         script_dir = os.path.dirname(__file__)
         resource_path = os.path.join(script_dir, './rendering/', constants.RENDERING.RESOURCES_DIR)
         self.ransomgame_config.render_config.resources_dir = resource_path
-        self.viewer = Viewer(idsgame_config=self.ransomgame_config)
+        self.viewer = Viewer(ransomgame_config=self.ransomgame_config)
         self.viewer.agent_start()
 
     def _build_state_to_idx_map(self):
+        # TODO think about what the environment states are
+        #  - they are different between attacker and defender
+        #  - attack: what stages have been achieved/reached
+        #  - defense: what alarms have triggered?
         """
         Builds a map that maps states to index (useful when constructing Q-tables for example)
 
@@ -459,7 +465,7 @@ class AttackerEnv(RansomGameEnv, ABC):
     attacker-agent should inherit this class
     """
 
-    def __init__(self, ransomgame_config: IdsGameConfig, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str = None, initial_state_path: str = None):
         """
         Initialization of the environment
 
