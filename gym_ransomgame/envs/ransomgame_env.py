@@ -15,6 +15,8 @@ from gym_ransomgame.envs.rendering.viewer import Viewer
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_ransomgame.envs.dao.game_state import GameState
 from gym_ransomgame.envs.dao.ransomgame_config import RansomGameConfig
+from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import DefendMinimalValueBotAgent
+import gym_ransomgame.envs.util.ransomgame_util as util
 
 
 class RansomGameEnv(gym.Env, ABC):
@@ -481,18 +483,16 @@ class AttackerEnv(RansomGameEnv, ABC):
         self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
-        import gym_idsgame.envs.util.idsgame_util as util
         attacker_action, _ = action
         return util.interpret_attack_action(attacker_action, self.ransomgame_config.game_config)
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
-        import gym_idsgame.envs.util.idsgame_util as util
         defend_id = self.ransomgame_config.defender_agent.action(self.state)
         defend_node_id, defend_node_pos, defend_type = util.interpret_defense_action(
             defend_id, self.ransomgame_config.game_config)
         return defend_node_id, defend_node_pos, defend_type
 
-class IdsGameMinimalDefenseV0Env(AttackerEnv):
+class RansomGameMinimalDefenseV0Env(AttackerEnv):
     """
     [AttackerEnv] 1 layer, 1 server per layer, 10 attack-defense-values, defender following the "defend minimal strategy"
     [Initial State] Defense: 2, Attack:0, Num vulnerabilities: 1, Det: 2, Vulnerability value: 0
@@ -504,7 +504,7 @@ class IdsGameMinimalDefenseV0Env(AttackerEnv):
     [Reconnaissance activities] disabled
     [Reconnaissance bool features] No
     """
-    def __init__(self, ransomgame_config: IdsGameConfig = None, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: RansomGameConfig = None, save_dir: str = None, initial_state_path: str = None):
         """
         Initialization of the environment
 
@@ -512,7 +512,6 @@ class IdsGameMinimalDefenseV0Env(AttackerEnv):
         :param initial_state_path: path to the initial state (if none, use default)
         :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
-        from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import DefendMinimalValueBotAgent
         if ransomgame_config is None:
             game_config = GameConfig(num_layers=1, num_servers_per_layer=1, num_attack_types=10, max_value=9)
             game_config.set_initial_state(defense_val=2, attack_val=0, num_vulnerabilities_per_node=1, det_val=2,
@@ -520,6 +519,6 @@ class IdsGameMinimalDefenseV0Env(AttackerEnv):
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
             defender_agent = DefendMinimalValueBotAgent(game_config)
-            ransomgame_config = IdsGameConfig(game_config=game_config, defender_agent=defender_agent)
-            ransomgame_config.render_config.caption = "idsgame-minimal_defense-v0"
+            ransomgame_config = RansomGameConfig(game_config=game_config, defender_agent=defender_agent)
+            ransomgame_config.render_config.caption = "ransomgame-minimal_defense-v0"
         super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir)
