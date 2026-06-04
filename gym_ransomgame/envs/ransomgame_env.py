@@ -461,13 +461,13 @@ class RansomGameEnv(gym.Env, ABC):
 
 class AttackerEnv(RansomGameEnv, ABC):
     """
-    Abstract AttackerEnv of the IdsGameEnv.
+    Abstract AttackerEnv of the RansomGameEnv.
 
     Environments where the defender is part of the environment and the environment is designed to be used by an
     attacker-agent should inherit this class
     """
 
-    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str = None, initial_state_path: str = None):
+    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str, initial_state_path: str):
         """
         Initialization of the environment
 
