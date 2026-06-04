@@ -3,6 +3,8 @@ Game-specific configuration for the gym-idsgame environment
 """
 import gymnasium as gym
 import numpy as np
+from gymnasium.spaces import Discrete
+
 from gym_ransomgame.envs.dao.game_state import GameState
 
 class GameConfig():
@@ -30,6 +32,8 @@ class GameConfig():
         :param initial_state_path: path to the initial state saved on disk
         :param dense_rewards: if true, give hacker dense rewards (reward for each intermediate server hacked)
         """
+        self.percent_encrypted = None
+        self.time = None
         self.manual_attacker = manual_attacker
         self.manual_defender = manual_defender
         self.num_attack_types = num_attack_types
@@ -58,8 +62,8 @@ class GameConfig():
 
     def set_initial_state(
             self,
-            defense_val=2,
-            attack_val=0,
+            time=0,
+            encrypted=0,
     ):
         """
         Utility function for setting the initial game state
@@ -68,32 +72,33 @@ class GameConfig():
         :param attack_val: attack value for attack types
         :return:
         """
-        self.defense_val = defense_val
-        self.attack_val = attack_val
+        self.time = time
+        self.percent_encrypted = encrypted
         self.initial_state.set_state(num_attack_types=self.num_attack_types)
 
-    def get_attacker_observation_space(self) -> gym.spaces.Box:
+    def get_attacker_observation_space(self) -> gym.spaces.Dict:
         """
         Creates an OpenAI-Gym Space for the game observation
 
         :return: observation space
         """
-        high_row = np.array([self.max_value] * (self.num_attack_types*2 + 2))
-        low = np.zeros((1, self.num_attack_types*2 + 2))
-        high = np.array([high_row] * 1)
-        observation_space = gym.spaces.Box(low=low, high=high, dtype=np.int32)
+        observation_space = gym.spaces.Dict({
+            "time": Discrete(n=200, start=0, dtype=np.int32),
+            "stages": Discrete(n=4, start=0, dtype=np.int32)
+        })
         return observation_space
 
-    def get_defender_observation_space(self) -> gym.spaces.Box:
+    def get_defender_observation_space(self) -> gym.spaces.Dict:
         """
         Creates an OpenAI-Gym Space for the game observation
 
         :return: observation space
         """
-        high_row = np.array([self.max_value] * (self.num_attack_types + 1))
-        high = np.array([high_row] * 1)
-        low = np.zeros((1, self.num_attack_types + 1))
-        observation_space = gym.spaces.Box(low=low, high=high, dtype=np.int32)
+        observation_space = gym.spaces.Dict({
+            "time": Discrete(n=200, start=0, dtype=np.int32),
+            "stages": gym.spaces.Box(low=0, high=10, shape=(1, 4), dtype=np.float32)
+            # local detector and global detector threat scores
+        })
         return observation_space
 
     def get_action_space(self, defender :bool = False) -> gym.spaces.Discrete:

@@ -50,7 +50,7 @@ class RansomGameEnv(gym.Env, ABC):
         if ransomgame_config is None:
             ransomgame_config = RansomGameConfig(initial_state_path=initial_state_path)
         self.save_dir = save_dir
-        self.validate_config(ransomgame_config)
+        # self.validate_config(ransomgame_config)
         self.ransomgame_config: RansomGameConfig = ransomgame_config
         self.state: GameState = self.ransomgame_config.game_config.initial_state.copy()
         self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
@@ -65,17 +65,14 @@ class RansomGameEnv(gym.Env, ABC):
          'render_fps': 50,
          'video.frames_per_second' : 50 # Video rendering speed
         }
-        import gymnasium as gym
         self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
+        """
         self.num_states = self.ransomgame_config.game_config.num_nodes
         self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1,
                                             self.ransomgame_config.game_config.num_nodes *
                                             (self.ransomgame_config.game_config.num_attack_types + 1)))
-        if self.ransomgame_config.game_config.network_config.fully_observed:
-            self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1,
-                                                self.ransomgame_config.game_config.num_nodes *
-                                                (self.ransomgame_config.game_config.num_attack_types + 1) * 2))
+        """
         self.num_attack_actions = self.ransomgame_config.game_config.num_attack_actions
         self.num_defense_actions = self.ransomgame_config.game_config.num_defense_actions
         self.past_moves = []
@@ -106,7 +103,7 @@ class RansomGameEnv(gym.Env, ABC):
             done (bool): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
-        import gym_idsgame.envs.util.idsgame_util as util
+
         # Initialization
         trajectory = []
         trajectory.append(self.state)
@@ -513,12 +510,13 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
         :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
         if ransomgame_config is None:
-            game_config = GameConfig(num_layers=1, num_servers_per_layer=1, num_attack_types=10, max_value=9)
-            game_config.set_initial_state(defense_val=2, attack_val=0, num_vulnerabilities_per_node=1, det_val=2,
-                                          vulnerability_val=0, num_vulnerabilities_per_layer=1)
+            game_config = GameConfig(manual_attacker=False, num_attack_types=2, max_value=0, manual_defender=False,
+                                     initial_state_path="../../data")
+            game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
             defender_agent = DefendMinimalValueBotAgent(game_config)
             ransomgame_config = RansomGameConfig(game_config=game_config, defender_agent=defender_agent)
             ransomgame_config.render_config.caption = "ransomgame-minimal_defense-v0"
-        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir)
+        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir, initial_state_path="../../data")
+
