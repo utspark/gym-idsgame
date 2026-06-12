@@ -12,11 +12,11 @@ class RansomGameConfig:
 
     def __init__(
         self,
-        render_config: RenderConfig = None,
-        game_config: GameConfig = None,
-        defender_agent: Agent = None,
-        attacker_agent: Agent = None,
-        initial_state_path: str = None,
+        render_config: RenderConfig,
+        game_config: GameConfig,
+        defender_agent: Agent,
+        attacker_agent: Agent,
+        initial_state_path: str,
         save_trajectories :bool = False,
         save_attack_stats : bool = False,
         randomize_env : bool = False,
@@ -27,7 +27,6 @@ class RansomGameConfig:
         # extra_reconnaissance_reward : bool = False,
         # reconnaissance_reward : bool = False,
         randomize_visibility : bool = True,
-        visibility_p : float = 0.5,
         # reconnaissance_detection_factor = 1,
     ):
         """
@@ -50,8 +49,8 @@ class RansomGameConfig:
         self.attacker_agent = attacker_agent
         if self.render_config is None:
             self.render_config = RenderConfig()
-        if self.game_config is None:
-            self.game_config = RansomGameConfig(initial_state_path=initial_state_path)
+        # if self.game_config is None:
+        #     self.game_config = RansomGameConfig(initial_state_path=initial_state_path)
         self.render_config.set_height(self.game_config.num_rows)
         self.render_config.set_width(self.game_config.num_cols)
         self.save_trajectories = save_trajectories
@@ -64,5 +63,5 @@ class RansomGameConfig:
         # self.extra_reconnaissance_reward = extra_reconnaissance_reward
         # self.reconnaissance_reward = reconnaissance_reward
         self.randomize_visibility = randomize_visibility
-        self.visibility_p = visibility_p
+        # self.visibility_p = visibility_p
         # self.reconnaissance_detection_factor = reconnaissance_detection_factor

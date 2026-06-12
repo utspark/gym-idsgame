@@ -86,5 +86,18 @@ def action_dist_hist(data: np.ndarray,
 
 
 def defense_score(game_state, game_config):
-    # TODO may have to implement this
-    pass
+    if not game_config.ransomware:
+        return -1
+    else:
+        return 1 - game_state.percent_encrypted
+
+
+def attack_score(game_state, game_config):
+    if not game_config.ransomware:
+        raise ValueError("Ransomware is not enabled")
+    else:
+        attack_reward = game_state.percent_encrypted + game_state.stages[0, 2] + game_state.stages[0, 3]
+
+        return attack_reward
+
+

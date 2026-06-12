@@ -19,10 +19,10 @@ class GameState:
 
     def __init__(
         self,
-        attack_values: np.ndarray = None,
-        defense_values: np.ndarray = None,
-        # defense_det: np.ndarray = None,
-        # attacker_pos: Union[int, int] = (0, 0),
+        attack_values: np.ndarray = np.zeros((1, 1)),
+        defense_values: np.ndarray = np.zeros((1, 1)),
+        defense_det: np.ndarray = None,
+        attacker_pos: Union[int, int] = (0, 0),
         game_step: int = 0,
         attacker_cumulative_reward: int = 0,
         defender_cumulative_reward: int = 0,
@@ -58,10 +58,17 @@ class GameState:
         :param num_hacks: number of wins for the attacker
         :param hacked: True if the attacker hacked the data node otherwise False
         """
+        self.time = 0
+        self.stages = np.zeros((1, 4))
+        self.percent_encrypted: float = 0
+        self.percent_benign_completed: float = 0
+        self.local_detector_scores: np.ndarray = np.zeros((1, 4))
+        self.global_detector_score: float = 0
+
         self.attack_values = attack_values
         self.defense_values = defense_values
-        # self.defense_det = defense_det
-        # self.attacker_pos = attacker_pos
+        self.defense_det = defense_det
+        self.attacker_pos = attacker_pos
         # self.reconnaissance_state = reconnaissance_state
         self.game_step = game_step
         self.attacker_cumulative_reward = attacker_cumulative_reward
@@ -88,10 +95,9 @@ class GameState:
 
     def default_state(
         self,
-        # node_list: List[int],
-        # attacker_pos: Union[int, int],
         num_attack_types: int,
-        # network_config: NetworkConfig,
+        num_rows: int = 10,
+        num_cols: int = 10,
         randomize_state : bool = False,
         randomize_visibility : bool = False,
         visibility_p : float = 0.5,
@@ -106,8 +112,17 @@ class GameState:
         :return: None
         """
         self.set_state(
-            num_attack_types,
+            0,
+            np.zeros((1, 4)),
+            0,
+            0,
+            np.zeros((1, 4)),
+            0
         )
+        self.defense_det = np.zeros((num_rows * num_cols, num_attack_types))
+        self.defense_values = np.zeros((num_rows * num_cols, num_attack_types))
+        self.attack_values = np.zeros((num_rows * num_cols, num_attack_types))
+        self.attacker_pos = (0, 0)
         # self.attacker_pos = attacker_pos
         self.game_step = 0
         self.attacker_cumulative_reward = 0
@@ -124,7 +139,12 @@ class GameState:
 
     def set_state(
             self,
-            num_attack_types : int,
+            time: int,
+            stages: np.ndarray = np.zeros((1, 4)),
+            percent_encrypted: float = 0,
+            percent_benign_completed: float = 0,
+            local_detector_scores: np.ndarray = np.zeros((1, 4)),
+            global_detector_score: float = 0,
     ):
         """
         Sets the state
@@ -135,14 +155,12 @@ class GameState:
         :param randomize_visibility: boolean flag whether to randomize visibility for partially observed envs
         :return: None
         """
-        num_nodes = 1
-        attack_values = np.zeros((num_nodes, num_attack_types))
-        defense_values = np.zeros((num_nodes, num_attack_types))
-        det_values = np.zeros(num_nodes)
-
-        self.attack_values = attack_values.astype(np.int32)
-        self.defense_values = defense_values.astype(np.int32)
-        self.defense_det = det_values.astype(np.int32)
+        self.time: int = time
+        self.stages = stages
+        self.percent_encrypted = percent_encrypted
+        self.percent_benign_completed = percent_benign_completed
+        self.local_detector_scores = local_detector_scores
+        self.global_detector_score = global_detector_score
 
 
     def new_game(
@@ -268,7 +286,7 @@ class GameState:
         """
         return True
 
-    def get_attacker_observation(self, local_view=False) -> np.ndarray:
+    def get_attacker_observation(self) -> dict:
         """
         Converts the state of the dynamical system into an observation for the attacker. As the environment
         is a partially observed markov decision process, the attacker observation is only a subset of the game state
@@ -276,8 +294,11 @@ class GameState:
         :param local_view: boolean flag indicating whether observations are provided in a local view or not
         :return: An observation of the environment
         """
-
-        return np.zeros(3)
+        attacker_observation = {
+            "time": int(self.time),
+            "stages": self.stages.flatten().astype(np.int8)
+        }
+        return attacker_observation
 
     def get_attacker_node_from_observation(self, observation: np.ndarray, reconnaissance : bool = False) -> int:
         """
@@ -297,16 +318,17 @@ class GameState:
                     return node_id
         raise AssertionError("Could not find the node that the attacker is in")
 
-    def add_attack_event(self, target_pos: Union[int, int], attack_type: int, attacker_pos: Union[int, int]) -> None:
+    def add_attack_event(self, target_pos: Union[int, int], attack_type: int, attacker_pos: Union[int, int], reconnaissance: bool = False) -> None:
         """
         Adds an attack event to the state
 
         :param target_pos: position in the grid of the target node
         :param attack_type: the type of the attack
         :param attacker_pos: position of the attacker
+        :param reconnaissance: reconnaissance flag
         :return: None
         """
-        attack_event = AttackDefenseEvent(target_pos, attack_type, attacker_pos=attacker_pos)
+        attack_event = AttackDefenseEvent(target_pos, attack_type, attacker_pos=attacker_pos, reconnaissance=reconnaissance)
         self.attack_events.append(attack_event)
 
     def add_defense_event(self, target_pos: Union[int, int], defense_type: int) -> None:
@@ -320,14 +342,20 @@ class GameState:
         defense_event = AttackDefenseEvent(target_pos, defense_type)
         self.defense_events.append(defense_event)
 
-    def get_defender_observation(self):
+    def get_defender_observation(self) -> dict:
         """
         Converts the state of the dynamical system into an observation for the defender. As the environment
         is a partially observed markov decision process, the defender observation is only a subset of the game state
 
         :return: An observation of the environment
         """
-        return None
+        defender_observation = {
+            "time": int(self.time),
+            "local_detector_scores": self.local_detector_scores.astype(np.float32),
+            "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
+        }
+
+        return defender_observation
 
     def restart(self) -> None:
         """
