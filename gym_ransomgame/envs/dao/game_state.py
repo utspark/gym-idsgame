@@ -1,16 +1,12 @@
 """
 Stateful data of the gym-ransomgame environment
 """
-from typing import Union, List
+from typing import List, Optional, Tuple
 import numpy as np
 import pickle
+from itertools import groupby
 
-from uno import Bool
-
-from gym_idsgame.envs.dao.node_type import NodeType
-from gym_idsgame.envs.constants import constants
 from gym_idsgame.envs.dao.attack_defense_event import AttackDefenseEvent
-from gym_idsgame.envs.dao.network_config import NetworkConfig
 
 class GameState:
     """
@@ -19,21 +15,22 @@ class GameState:
 
     def __init__(
         self,
-        attack_values: np.ndarray = np.zeros((1, 1)),
-        defense_values: np.ndarray = np.zeros((1, 1)),
-        defense_det: np.ndarray = None,
-        attacker_pos: Union[int, int] = (0, 0),
+        attack_values: Optional[np.ndarray] = None,
+        defense_values: Optional[np.ndarray] = None,
+        defense_det: Optional[np.ndarray] = None,
+        attacker_pos: Tuple[int, int] = (0, 0),
         game_step: int = 0,
         attacker_cumulative_reward: int = 0,
         defender_cumulative_reward: int = 0,
         num_games: int = 0,
-        attack_events: List[AttackDefenseEvent] = None,
-        defense_events: List[AttackDefenseEvent] = None,
+        attack_events: Optional[List[int]] = None,
+        defense_events: Optional[List[AttackDefenseEvent]] = None,
         done: bool = False,
         detected: bool = False,
         attack_type: int = 0,
         num_hacks: int = 0,
         hacked: bool = False,
+        np_random: Optional[np.random.Generator] = None,
         # min_random_a_val :int = 0,
         # min_random_d_val :int = 0,
         # min_random_det_val :int = 0,
@@ -60,35 +57,45 @@ class GameState:
         """
         self.time = 0
         self.stages = np.zeros((1, 4))
+        self.stage_time_spent = np.zeros((1, 4), dtype=int)
         self.percent_encrypted: float = 0
         self.percent_benign_completed: float = 0
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
         self.global_detector_score: float = 0
 
-        self.attack_values = attack_values
-        self.defense_values = defense_values
-        self.defense_det = defense_det
-        self.attacker_pos = attacker_pos
+        if attack_values is None:
+            attack_values = np.zeros((1, 1))
+        self.attack_values: np.ndarray = attack_values
+
+        if defense_values is None:
+            defense_values = np.zeros((1, 1))
+        self.defense_values: np.ndarray = defense_values
+
+        self.defense_det: Optional[np.ndarray] = defense_det
+        self.attacker_pos: Tuple[int, int] = attacker_pos
         # self.reconnaissance_state = reconnaissance_state
-        self.game_step = game_step
-        self.attacker_cumulative_reward = attacker_cumulative_reward
-        self.defender_cumulative_reward = defender_cumulative_reward
-        self.num_games = num_games
-        self.attack_events = attack_events
-        self.defense_events = defense_events
+        self.game_step: int = game_step
+        self.attacker_cumulative_reward: int = attacker_cumulative_reward
+        self.defender_cumulative_reward: int = defender_cumulative_reward
+        self.num_games: int = num_games
+
+        if attack_events is None:
+            attack_events = []
+        self.attack_events: List[int] = attack_events
+
+        if defense_events is None:
+            defense_events = []
+        self.defense_events: List[AttackDefenseEvent] = defense_events
+
         # self.min_random_a_val = min_random_a_val
-        # self.min_random_d_val = min_random_d_val
-        # self.min_random_det_val = min_random_det_val
-        # self.max_value = max_value
-        if self.attack_events is None:
-            self.attack_events = []
-        if self.defense_events is None:
-            self.defense_events = []
         self.done = done
         self.detected = detected
         self.attack_defense_type = attack_type
         self.num_hacks = num_hacks
         self.hacked = hacked
+        if np_random is None:
+            np_random = np.random.default_rng()
+        self.np_random: np.random.Generator = np_random
         self.action_descriptors = ["RE", "F1", "F2", "EX"]
         # self.reconnaissance_actions = []
         # self.max_random_v_val = max_random_v_val
@@ -140,10 +147,10 @@ class GameState:
     def set_state(
             self,
             time: int,
-            stages: np.ndarray = np.zeros((1, 4)),
+            stages: Optional[np.ndarray] = None,
             percent_encrypted: float = 0,
             percent_benign_completed: float = 0,
-            local_detector_scores: np.ndarray = np.zeros((1, 4)),
+            local_detector_scores: Optional[np.ndarray] = None,
             global_detector_score: float = 0,
     ):
         """
@@ -156,11 +163,15 @@ class GameState:
         :return: None
         """
         self.time: int = time
-        self.stages = stages
-        self.percent_encrypted = percent_encrypted
-        self.percent_benign_completed = percent_benign_completed
-        self.local_detector_scores = local_detector_scores
-        self.global_detector_score = global_detector_score
+        if stages is None:
+            stages = np.zeros((1, 4))
+        self.stages: np.ndarray = stages
+        self.percent_encrypted: float = percent_encrypted
+        self.percent_benign_completed: float = percent_benign_completed
+        if local_detector_scores is None:
+            local_detector_scores = np.zeros((1, 4))
+        self.local_detector_scores: np.ndarray = local_detector_scores
+        self.global_detector_score: float = global_detector_score
 
 
     def new_game(
@@ -180,7 +191,7 @@ class GameState:
             # num_vulnerabilities_per_node : int = None,
             # randomize_visibility : bool = False,
             # visibility_p : float = 0.5,
-            np_random: np.random.Generator = None,
+            np_random: Optional[np.random.Generator] = None,
     ) -> None:
         """
         Updates the current state for a new game
@@ -202,12 +213,14 @@ class GameState:
                 self.attacker_cumulative_reward += a_reward
                 self.defender_cumulative_reward += d_reward
         self.done = False
+        self.time = 0
         self.attack_defense_type = 0
         self.game_step = 0
         self.attack_events = []
         self.defense_events = []
-        if np_random is None:
-            np_random = np.random
+        if np_random is not None:
+            self.np_random = np_random
+        np_random = self.np_random
         if not randomize_state:
             self.attack_values = np.copy(init_state.attack_values)
             self.defense_values = np.copy(init_state.defense_values)
@@ -229,6 +242,7 @@ class GameState:
         new_state.defense_values = np.copy(self.defense_values)
         new_state.defense_det = np.copy(self.defense_det)
         # new_state.reconnaissance_state = np.copy(self.reconnaissance_state)
+        new_state.time = self.time
         new_state.game_step = self.game_step
         new_state.attacker_cumulative_reward = self.attacker_cumulative_reward
         new_state.defender_cumulative_reward = self.defender_cumulative_reward
@@ -240,6 +254,7 @@ class GameState:
         new_state.attack_defense_type = self.attack_defense_type
         new_state.num_hacks = self.num_hacks
         new_state.hacked = self.hacked
+        new_state.np_random = self.np_random
         # new_state.reconnaissance_actions = self.reconnaissance_actions
         return new_state
 
@@ -251,7 +266,8 @@ class GameState:
         :param attack_type: the type of attack action to execute
         :return: None
         """
-        pass
+        self.add_attack_event(attack_type)
+        return
 
     def defend(self, defense_type: int) -> bool:
         """
@@ -264,18 +280,67 @@ class GameState:
         """
         return True
 
-    def simulate_attack(self, attack_type: int) -> bool:
+    @staticmethod
+    def _calculate_exponential_probability(p_base: float, p_progress: float, n: int) -> float:
         """
-        Implement this:
+        Calculates the probability using an exponential saturation model.
+        p(n) = 1 - (1 - p_base) * (1 - p_progress)^(n-1)
 
-        :param attacked_node_id: the id of the node that is attacked
+        :param p_base: base probability for the first attempt (n=1)
+        :param p_progress: progress rate per attempt
+        :param n: number of consecutive attempts (n >= 1)
+        :return: calculated probability
+        """
+        if n < 1:
+            return 0.0
+        return 1 - (1 - p_base) * (1 - p_progress) ** (n - 1)
+
+    def simulate_attack(self, attack_type: int, np_random: Optional[np.random.Generator] = None) -> bool:
+        """
+        Simulates the outcome of an attack.
+
+        Instead of a simple linear increase, this uses an exponential progress model
+        to represent how repeated attempts increase the probability of success,
+        modeling a 'work-to-completion' process.
+
         :param attack_type: the type of the attack
-        :param network_config: NetworkConfig
+        :param np_random: random number generator
         :return: True if the attack was successful otherwise False
         """
-        return True
+        np_random = np_random or self.np_random
+        assert np_random is not None
 
-    def simulate_detection(self, node_id: int, np_random: np.random.Generator = None) -> bool:
+        # 1. Count consecutive occurrences of the same attack_type at the end of the history
+        consecutive_attempts = 0
+        for k, g in groupby(reversed(self.attack_events)):
+            if k == attack_type:
+                consecutive_attempts = len(list(g))
+            break
+
+        if consecutive_attempts == 0:
+            return False
+
+        # 2. Hardcoded parameters for each attack type: (p_base, p_progress)
+        # 0: RE, 1: F1, 2: F2, 3: EX
+        attack_configs = {
+            0: (0.1, 0.1),
+            1: (0.1, 0.1),
+            2: (0.1, 0.1),
+            3: (0.1, 0.1)
+        }
+        p_base, p_progress = attack_configs.get(attack_type, (0.1, 0.1))
+
+        # 3. Calculate base probability using exponential saturation
+        p = self._calculate_exponential_probability(p_base, p_progress, consecutive_attempts)
+
+        # 4. Modifier: 3rd attack (index 2, "F2") gets a bonus if 2nd stage (index 1, "F1") is set to 1
+        if attack_type == 2 and self.stages[0, 1] == 1:
+            p += 0.4
+
+        p = np.clip(p, 0, 1)
+        return np_random.binomial(1, p) == 1
+
+    def simulate_detection(self, np_random: Optional[np.random.Generator] = None) -> bool:
         """
         Implement this:
 
@@ -284,7 +349,38 @@ class GameState:
         :param np_random: random number generator
         :return: True if the node was detected, otherwise False
         """
-        return True
+        np_random = np_random or self.np_random
+        assert np_random is not None
+
+        p = np.sum(self.stage_time_spent) / 100
+
+        return np_random.binomial(1, p) == 1
+
+    def defense_score(self, game_config):
+        if not game_config.ransomware:
+            return -1
+        else:
+            return 1 - self.percent_encrypted
+
+    def attack_score(self, game_config, attack_action):
+        if not game_config.ransomware:
+            raise ValueError("Ransomware is not enabled")
+        else:
+            attack_reward = -0.1
+            if attack_action == 0:
+                attack_reward += 1
+            elif attack_action == 1:
+                attack_reward += 1
+            elif attack_action == 2:
+                attack_reward += 1
+            elif attack_action == 3:
+                attack_reward += 10
+            else:
+                raise ValueError("Invalid attack action")
+
+            # + game_state.percent_encrypted + game_state.stages[0, 2] + game_state.stages[0, 3])
+
+            return attack_reward
 
     def get_attacker_observation(self) -> dict:
         """
@@ -318,20 +414,16 @@ class GameState:
                     return node_id
         raise AssertionError("Could not find the node that the attacker is in")
 
-    def add_attack_event(self, target_pos: Union[int, int], attack_type: int, attacker_pos: Union[int, int], reconnaissance: bool = False) -> None:
+    def add_attack_event(self, attack_type: int) -> None:
         """
         Adds an attack event to the state
 
-        :param target_pos: position in the grid of the target node
         :param attack_type: the type of the attack
-        :param attacker_pos: position of the attacker
-        :param reconnaissance: reconnaissance flag
         :return: None
         """
-        attack_event = AttackDefenseEvent(target_pos, attack_type, attacker_pos=attacker_pos, reconnaissance=reconnaissance)
-        self.attack_events.append(attack_event)
+        self.attack_events.append(attack_type)
 
-    def add_defense_event(self, target_pos: Union[int, int], defense_type: int) -> None:
+    def add_defense_event(self, target_pos: Tuple[int, int], defense_type: int) -> None:
         """
         Adds a defense event to the state
 
@@ -339,7 +431,7 @@ class GameState:
         :param defense_type: the type of the defense
         :return: None
         """
-        defense_event = AttackDefenseEvent(target_pos, defense_type)
+        defense_event = AttackDefenseEvent(target_pos, defense_type) # type: ignore
         self.defense_events.append(defense_event)
 
     def get_defender_observation(self) -> dict:
