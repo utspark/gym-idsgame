@@ -9,7 +9,7 @@ import gymnasium as gym
 import math
 import numpy as np
 
-from typing import Union, Any, Literal
+from typing import Union, Any, Literal, Optional, List, Tuple
 from abc import ABC, abstractmethod
 
 from numpy import ndarray
@@ -75,7 +75,7 @@ class RansomGameEnv(gym.Env, ABC):
         self.ransomgame_config: RansomGameConfig = ransomgame_config
         if self.ransomgame_config.game_config.initial_state is None:
             raise ValueError("initial_state cannot be None")
-        self.state: GameState = self.ransomgame_config.game_config.initial_state.copy()
+        self.state: GameState = self.ransomgame_config.game_config.initial_state
         self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
         self.action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
         self.attacker_action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
@@ -114,7 +114,7 @@ class RansomGameEnv(gym.Env, ABC):
         self.failed_attacks = {}
 
     # -------- API ------------
-    def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
+    def step(self, action: Any) -> tuple[dict, float, bool, bool, dict]:
         """
         Takes a step in the environment using the given action.
 
@@ -130,8 +130,8 @@ class RansomGameEnv(gym.Env, ABC):
         """
 
         # Initialization
-        trajectory = [self.state]
-        reward = (0,0)
+        trajectory: List[Any] = [self.state]
+        reward: Tuple[Any, Any] = (0, 0)
         info = {"moved": False}
         self.state.attack_events = []
         self.state.defense_events = []
@@ -218,7 +218,7 @@ class RansomGameEnv(gym.Env, ABC):
             self.game_trajectories.append(trajectory)
         return obs, float(reward[0]), self.state.done, False, info
 
-    def reset(self, seed: int = None, options: dict = None, update_stats = False) -> tuple[dict, dict]:
+    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None, update_stats: bool = False) -> tuple[dict, dict]:
         """
         Resets the environment and returns the initial state
 
@@ -242,7 +242,9 @@ class RansomGameEnv(gym.Env, ABC):
         self.hacked_nodes = []
         self.failed_attacks = {}
         self.steps_beyond_done = None
-        self.state.new_game(self.ransomgame_config.game_config.initial_state, self.a_cumulative_reward,
+        initial_state = self.ransomgame_config.game_config.initial_state
+        assert initial_state is not None
+        self.state.new_game(initial_state, self.a_cumulative_reward,
                             self.d_cumulative_reward, update_stats=update_stats,
                             randomize_state=self.ransomgame_config.randomize_env,
                             num_attack_types=self.ransomgame_config.game_config.num_attack_types,
@@ -362,7 +364,7 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return: (attacker_reward, defender_reward)
         """
-        return -1, util.defense_score(self.state, self.ransomgame_config.game_config)
+        return -1, self.state.defense_score(self.ransomgame_config.game_config)
 
     def get_successful_attack_reward(self, attack_action) -> tuple[Any, int]:
         """
@@ -371,9 +373,9 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return:(attacker_reward, defender_reward)
         """
-        return util.attack_score(self.state, self.ransomgame_config.game_config, attack_action), int(0)
+        return self.state.attack_score(self.ransomgame_config.game_config, attack_action), int(0)
 
-    def get_observation(self) -> tuple[ndarray, ndarray]:
+    def get_observation(self) -> tuple[dict, dict]:
         """
         Returns an observation of the state
 

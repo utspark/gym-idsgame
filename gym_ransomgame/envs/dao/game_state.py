@@ -8,6 +8,10 @@ from itertools import groupby
 
 from gym_idsgame.envs.dao.attack_defense_event import AttackDefenseEvent
 
+
+
+
+
 class GameState:
     """
     DTO representing the state of the game
@@ -362,27 +366,7 @@ class GameState:
         else:
             return 1 - self.percent_encrypted
 
-    def attack_score(self, game_config, attack_action):
-        if not game_config.ransomware:
-            raise ValueError("Ransomware is not enabled")
-        else:
-            attack_reward = -0.1
-            if attack_action == 0:
-                attack_reward += 1
-            elif attack_action == 1:
-                attack_reward += 1
-            elif attack_action == 2:
-                attack_reward += 1
-            elif attack_action == 3:
-                attack_reward += 10
-            else:
-                raise ValueError("Invalid attack action")
-
-            # + game_state.percent_encrypted + game_state.stages[0, 2] + game_state.stages[0, 3])
-
-            return attack_reward
-
-    def get_attacker_observation(self) -> dict:
+    def get_attacker_observation(self) -> dict[str, int | np.ndarray]:
         """
         Converts the state of the dynamical system into an observation for the attacker. As the environment
         is a partially observed markov decision process, the attacker observation is only a subset of the game state
@@ -392,7 +376,7 @@ class GameState:
         """
         attacker_observation = {
             "time": int(self.time),
-            "stages": self.stages.flatten().astype(np.int8)
+            "stages": self.stages.flatten().astype(int)
         }
         return attacker_observation
 
@@ -434,7 +418,7 @@ class GameState:
         defense_event = AttackDefenseEvent(target_pos, defense_type) # type: ignore
         self.defense_events.append(defense_event)
 
-    def get_defender_observation(self) -> dict:
+    def get_defender_observation(self) -> dict[str, int | np.ndarray]:
         """
         Converts the state of the dynamical system into an observation for the defender. As the environment
         is a partially observed markov decision process, the defender observation is only a subset of the game state
@@ -468,3 +452,26 @@ class GameState:
     def save(path, state):
         filehandler = open(path + "/initial_state.pkl", 'wb')
         pickle.dump(state, filehandler)
+
+    @staticmethod
+    def attack_score(game_config, attack_action):
+        if not game_config.ransomware:
+            raise ValueError("Ransomware is not enabled")
+        else:
+            attack_reward = -0.1
+            if attack_action == 0:
+                attack_reward += 1
+            elif attack_action == 1:
+                attack_reward += 1
+            elif attack_action == 2:
+                attack_reward += 1
+            elif attack_action == 3:
+                attack_reward += 10
+            else:
+                raise ValueError("Invalid attack action")
+
+            # + game_state.percent_encrypted + game_state.stages[0, 2] + game_state.stages[0, 3])
+
+            return attack_reward
+
+

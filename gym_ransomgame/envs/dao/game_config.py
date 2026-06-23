@@ -6,6 +6,7 @@ import numpy as np
 from gymnasium.spaces import Discrete
 from gym_idsgame.envs.dao.network_config import NetworkConfig
 
+from typing import Optional
 from gym_ransomgame.envs.dao.game_state import GameState
 
 class GameConfig:
@@ -14,15 +15,15 @@ class GameConfig:
     """
     def __init__(
             self,
-            initial_state: GameState = None,
+            initial_state: Optional[GameState] = None,
             ransomware: bool = False,
             manual_attacker: bool = True,
             num_attack_types: int = 10,
             max_value: int = 10,
 
             manual_defender: bool = False,
-            initial_state_path: str = None,
-            dense_rewards = False,
+            initial_state_path: Optional[str] = None,
+            dense_rewards: bool = False,
     ):
         """
         Class constructor, initializes the DTO
@@ -54,7 +55,7 @@ class GameConfig:
         self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)
         self.initial_state_path = initial_state_path
         # self.num_vulnerabilities_per_layer = None
-        self.initial_state = initial_state
+        self.initial_state: GameState = initial_state # type: ignore
         if self.initial_state is None and self.initial_state_path is not None:
             self.initial_state = GameState.load(self.initial_state_path)
         if self.initial_state is None:
