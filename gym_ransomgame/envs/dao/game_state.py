@@ -8,9 +8,27 @@ from itertools import groupby
 
 from gym_idsgame.envs.dao.attack_defense_event import AttackDefenseEvent
 
+DEFAULT_REWARD = -0.1
+PROGRESS_REWARD = 0.2
 
+RECONNAISSANCE = 0
+COMPRESSION = 1
+EXFILTRATION = 2
+ENCRYPTION = 3
 
+attack_configs = {
+            0: (0.1, 0.1),
+            1: (0.1, 0.1),
+            2: (0.1, 0.1),
+            3: (0.1, 0.1)
+        }
 
+consecutive_attempt_requirements = {
+    0: 2,
+    1: 4,
+    2: 5,
+    3: 8,
+}
 
 class GameState:
     """
@@ -299,6 +317,142 @@ class GameState:
         if n < 1:
             return 0.0
         return 1 - (1 - p_base) * (1 - p_progress) ** (n - 1)
+
+    def get_consecutive_attack_attempts(self, attack_type: int) -> int:
+        consecutive_attempts = 0
+        for k, g in groupby(reversed(self.attack_events)):
+            if k == attack_type:
+                consecutive_attempts = len(list(g))
+            break
+
+        return consecutive_attempts
+
+    @staticmethod
+    def _get_consecutive_attack_requirement(attack_type: int) -> int:
+        return consecutive_attempt_requirements.get(attack_type, 2)
+
+
+    def get_attack_probability(self, attack_type: int) -> float:
+        p_base, p_progress = attack_configs.get(attack_type, (0.1, 0.1))
+        return self._calculate_exponential_probability(p_base, p_progress, self.get_consecutive_attack_attempts(attack_type))
+
+    def simulate_recon(self, np_random: Optional[np.random.Generator] = None, exponential=True) -> float:
+        attack_type = RECONNAISSANCE
+        reward = DEFAULT_REWARD
+        consecutive_attempt_requirement = self._get_consecutive_attack_requirement(attack_type)
+        attack_success = False
+
+        np_random = np_random or self.np_random
+        assert np_random is not None
+
+        if self.stages[0, attack_type] == 1:
+            return reward
+
+        if exponential:
+            p = self.get_attack_probability(attack_type)
+            attack_success = np_random.binomial(1, p) == 1
+        else:
+            consecutive_attempts = self.get_consecutive_attack_attempts(attack_type)
+            if consecutive_attempts > consecutive_attempt_requirement:
+                attack_success = True
+
+        if attack_success:
+            reward += 1
+
+        return reward
+
+    def simulate_compression(self, np_random: Optional[np.random.Generator] = None, exponential=True) -> float:
+        attack_type = COMPRESSION
+        reward = DEFAULT_REWARD
+        consecutive_attempt_requirement = self._get_consecutive_attack_requirement(attack_type)
+        attack_success = False
+
+        np_random = np_random or self.np_random
+        assert np_random is not None
+
+        if self.stages[0, attack_type] == 1:
+            return reward
+
+        if exponential:
+            reward += PROGRESS_REWARD
+            p = self.get_attack_probability(attack_type)
+            attack_success = np_random.binomial(1, p) == 1
+            # self.percent_encrypted = p
+        else:
+            reward += PROGRESS_REWARD
+            consecutive_attempts = self.get_consecutive_attack_attempts(attack_type)
+            if consecutive_attempts > consecutive_attempt_requirement:
+                attack_success = True
+
+        if attack_success:
+            reward += 1
+
+        return reward
+
+    def simulate_exfiltration(self, np_random: Optional[np.random.Generator] = None, exponential=True) -> float:
+        attack_type = EXFILTRATION
+        reward = DEFAULT_REWARD
+        consecutive_attempt_requirement = self._get_consecutive_attack_requirement(attack_type)
+        attack_success = False
+
+        np_random = np_random or self.np_random
+        assert np_random is not None
+
+        if self.stages[0, attack_type] == 1:
+            return reward
+
+        if exponential:
+            p = self.get_attack_probability(attack_type)
+            if self.stages[0, COMPRESSION] == 1:
+                p = p * 2
+                p = np.clip(p, 0, 1)
+
+            self.percent_exfiltrated = p
+            attack_success = np_random.binomial(1, p) == 1
+        else:
+            consecutive_attempts = self.get_consecutive_attack_attempts(attack_type)
+            if self.stages[0, COMPRESSION] == 1:
+                consecutive_attempts *= 2
+                consecutive_attempts = np.clip(consecutive_attempts, 0, consecutive_attempt_requirement)
+            self.percent_exfiltrated = consecutive_attempts / consecutive_attempt_requirement
+
+            if consecutive_attempts >= consecutive_attempt_requirement:
+                attack_success = True
+
+        reward += PROGRESS_REWARD
+        if attack_success:
+            reward += 1
+
+        return reward
+
+    def simulate_encryption(self, np_random: Optional[np.random.Generator] = None, exponential=True) -> float:
+        attack_type = ENCRYPTION
+        reward = DEFAULT_REWARD
+        consecutive_attempt_requirement = self._get_consecutive_attack_requirement(attack_type)
+        attack_success = False
+
+        np_random = np_random or self.np_random
+        assert np_random is not None
+
+        if self.stages[0, attack_type] == 1:
+            return reward
+
+        if exponential:
+            p = self.get_attack_probability(attack_type)
+            self.percent_encrypted = p
+            attack_success = np_random.binomial(1, p) == 1
+        else:
+            consecutive_attempts = self.get_consecutive_attack_attempts(attack_type)
+            self.percent_encrypted = consecutive_attempts / consecutive_attempt_requirement
+            if consecutive_attempts > consecutive_attempt_requirement:
+                attack_success = True
+
+        reward += PROGRESS_REWARD
+        if attack_success:
+            reward += 1
+
+        return reward
+
 
     def simulate_attack(self, attack_type: int, np_random: Optional[np.random.Generator] = None, exponential=True) -> bool:
         """
