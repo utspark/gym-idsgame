@@ -62,6 +62,7 @@ class GameState:
         self.time = 0
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
+        self.percent_exfiltrated: float = 0
         self.percent_encrypted: float = 0
         self.percent_benign_completed: float = 0
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
@@ -79,8 +80,8 @@ class GameState:
         self.attacker_pos: Tuple[int, int] = attacker_pos
         # self.reconnaissance_state = reconnaissance_state
         self.game_step: int = game_step
-        self.attacker_cumulative_reward: int = attacker_cumulative_reward
-        self.defender_cumulative_reward: int = defender_cumulative_reward
+        self.attacker_cumulative_reward: float = attacker_cumulative_reward
+        self.defender_cumulative_reward: float = defender_cumulative_reward
         self.num_games: int = num_games
 
         if attack_events is None:
@@ -299,7 +300,7 @@ class GameState:
             return 0.0
         return 1 - (1 - p_base) * (1 - p_progress) ** (n - 1)
 
-    def simulate_attack(self, attack_type: int, np_random: Optional[np.random.Generator] = None) -> bool:
+    def simulate_attack(self, attack_type: int, np_random: Optional[np.random.Generator] = None, exponential=True) -> bool:
         """
         Simulates the outcome of an attack.
 
@@ -309,10 +310,20 @@ class GameState:
 
         :param attack_type: the type of the attack
         :param np_random: random number generator
+        :param exponential: whether to use exponential progress model
         :return: True if the attack was successful otherwise False
         """
         np_random = np_random or self.np_random
         assert np_random is not None
+
+        if self.stages[0, attack_type] == 1:
+            return False
+
+        if attack_type == 2:
+            self.percent_exfiltrated += 0.1
+
+        if attack_type == 3:
+            self.percent_encrypted += 0.1
 
         # 1. Count consecutive occurrences of the same attack_type at the end of the history
         consecutive_attempts = 0
@@ -320,9 +331,6 @@ class GameState:
             if k == attack_type:
                 consecutive_attempts = len(list(g))
             break
-
-        if consecutive_attempts == 0:
-            return False
 
         # 2. Hardcoded parameters for each attack type: (p_base, p_progress)
         # 0: RE, 1: F1, 2: F2, 3: EX
@@ -335,14 +343,31 @@ class GameState:
         p_base, p_progress = attack_configs.get(attack_type, (0.1, 0.1))
 
         # 3. Calculate base probability using exponential saturation
-        p = self._calculate_exponential_probability(p_base, p_progress, consecutive_attempts)
+        if not exponential:
+            attack_success = False
 
-        # 4. Modifier: 3rd attack (index 2, "F2") gets a bonus if 2nd stage (index 1, "F1") is set to 1
-        if attack_type == 2 and self.stages[0, 1] == 1:
-            p += 0.4
+            if attack_type == 2 or attack_type ==3:
+                if attack_type == 2:
+                    self.percent_exfiltrated += 0.2
+                    if self.percent_exfiltrated >= 1.0:
+                        attack_success = True
+                else:
+                    self.percent_exfiltrated += 0.2
+                    if self.percent_encrypted >= 1.0:
+                        attack_success = True
+            else:
+                raise ValueError("Invalid attack type for simulation approach")
+        else:
+            p = self._calculate_exponential_probability(p_base, p_progress, consecutive_attempts)
 
-        p = np.clip(p, 0, 1)
-        return np_random.binomial(1, p) == 1
+            # 4. Modifier: 3rd attack (index 2, "F2") gets a bonus if 2nd stage (index 1, "F1") is set to 1
+            if attack_type == 2 and self.stages[0, 1] == 1:
+                p += 0.4
+
+            p = np.clip(p, 0, 1)
+            attack_success = np_random.binomial(1, p) == 1
+
+        return attack_success
 
     def simulate_detection(self, np_random: Optional[np.random.Generator] = None) -> bool:
         """

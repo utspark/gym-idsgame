@@ -131,7 +131,7 @@ class RansomGameEnv(gym.Env, ABC):
 
         # Initialization
         trajectory: List[Any] = [self.state]
-        reward: Tuple[Any, Any] = (0, 0)
+        reward: Tuple[Any, Any] = (-0.1, float(0))
         info = {"moved": False}
         self.state.attack_events = []
         self.state.defense_events = []
@@ -176,6 +176,13 @@ class RansomGameEnv(gym.Env, ABC):
                 self.state.stages[0, attack_action] = 1
                 reward = self.get_successful_attack_reward(attack_action)
                 self.num_failed_attacks = 0
+
+                if attack_action == 3:
+                    self.state.done = True
+                    detected = self.state.simulate_detection(np_random=self.np_random)
+
+                    if self.ransomgame_config.save_attack_stats:
+                        self.attack_detections.append([detected, self.state.stages, self.state.stage_time_spent])
             else:
                 self.state.stage_time_spent[0, attack_action] += 1
                 detected = self.state.simulate_detection(np_random=self.np_random)
@@ -358,22 +365,22 @@ class RansomGameEnv(gym.Env, ABC):
             self.attack_detections = []
             self.total_attacks = []
 
-    def get_detect_reward(self, *args, **kwargs) -> tuple[int, Any]:
+    def get_detect_reward(self, *args, **kwargs) -> tuple[float, Any]:
         """
         Returns the attacker and defender reward in the case when the attacker was detected.
 
         :return: (attacker_reward, defender_reward)
         """
-        return -1, self.state.defense_score(self.ransomgame_config.game_config)
+        return float(-1), self.state.defense_score(self.ransomgame_config.game_config)
 
-    def get_successful_attack_reward(self, attack_action) -> tuple[Any, int]:
+    def get_successful_attack_reward(self, attack_action) -> tuple[Any, float]:
         """
         Returns the reward for the attacker and defender after a successful attack on some server in
         the network
 
         :return:(attacker_reward, defender_reward)
         """
-        return self.state.attack_score(self.ransomgame_config.game_config, attack_action), int(0)
+        return self.state.attack_score(self.ransomgame_config.game_config, attack_action), float(0)
 
     def get_observation(self) -> tuple[dict, dict]:
         """
