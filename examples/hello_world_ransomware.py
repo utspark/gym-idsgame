@@ -18,14 +18,14 @@ def attack_against_baseline_defense_env(render=False, seed=None, pause=False):
         defense_action = None
         a = (attack_action, defense_action)
         obs, reward, done, truncated, info = env.step(a)
-        print(f"Action: {attack_action}, Reward: {reward}, Done: {done}")
+        print(f"Action: {attack_action}, Reward: {reward}, Done: {done}, Info: {info}")
         print(f"Obs: {obs}")
         print("\n")
 
 
 def main():
     render = False
-    seed = 0
+    seed = 7
     pause = False
     attack_against_baseline_defense_env(render=render, seed=seed, pause=pause)
 

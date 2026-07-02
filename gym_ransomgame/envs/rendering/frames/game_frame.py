@@ -31,6 +31,7 @@ class GameFrame(pyglet.window.Window):
         :param idsgame_config: Config for the IdsGameEnv
         """
         self.ransomgame_config = ransomgame_config
+        self.idsgame_config = ransomgame_config
         # call constructor of parent class
         super(GameFrame, self).__init__(height=ransomgame_config.render_config.height,
                                         width=ransomgame_config.render_config.width,

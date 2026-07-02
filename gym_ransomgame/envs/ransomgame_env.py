@@ -131,10 +131,8 @@ class RansomGameEnv(gym.Env, ABC):
 
         # Initialization
         trajectory: List[Any] = [self.state]
-        reward: Tuple[Any, Any] = (-0.1, float(0))
-        info = {"moved": False}
-        self.state.attack_events = []
-        self.state.defense_events = []
+        reward: Tuple[float, float] = (-0.1, float(0))
+        info = {"detected": False}
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
             obs, _ = self.get_observation()
@@ -158,48 +156,31 @@ class RansomGameEnv(gym.Env, ABC):
         #     self.defenses.append((defense_node_id, defense_type, detect, self.state.game_step))
         # self.state.add_defense_event(defense_pos, defense_type)
 
+        # 4. Attack
         if attack_action != -1:
-            # 4. Attack
-            self.state.attack(attack_type=attack_action)
+            # self.state.attack(attack_type=attack_action)
             # self.state.add_attack_event(target_pos, attack_type, self.state.attacker_pos, reconnaissance)
             # self.attacks.append((target_node_id, attack_type, self.state.game_step, reconnaissance))
 
-            attack_successful = False
-            # 5. Simulate attack outcome
-            attack_successful = self.state.simulate_attack(attack_type=attack_action)
+            reward = self.state.simulate_stage(attack_type=attack_action, exponential=True)
+
             if self.ransomgame_config.save_attack_stats:
-                self.total_attacks.append([attack_action, attack_successful])
+                self.total_attacks.append([attack_action, self.state.attack_successful])
 
-            # 6. Update state based on attack outcome
-            if attack_successful:
-                info["moved"] = True
-                self.state.stages[0, attack_action] = 1
-                reward = self.get_successful_attack_reward(attack_action)
-                self.num_failed_attacks = 0
-
-                if attack_action == 3:
-                    self.state.done = True
-                    detected = self.state.simulate_detection(np_random=self.np_random)
-
-                    if self.ransomgame_config.save_attack_stats:
-                        self.attack_detections.append([detected, self.state.stages, self.state.stage_time_spent])
-            else:
-                self.state.stage_time_spent[0, attack_action] += 1
-                detected = self.state.simulate_detection(np_random=self.np_random)
-                if detected:
-                    self.state.done = True
-                    self.state.detected = True
-                    reward = self.get_detect_reward()
-                # else:
-                #     if not reconnaissance:
-                #         reward = self.get_blocked_attack_reward(target_node_id, attack_type)
-                if self.ransomgame_config.save_attack_stats:
-                    self.attack_detections.append([detected, self.state.stages, self.state.stage_time_spent])
         else:
             #print("illegal action:{}".format(attack_action))
             reward = -1*constants.GAME_CONFIG.POSITIVE_REWARD, 0
             # self.state.done = True
             # self.state.detected = True
+
+        # 5. Detection
+        detected = self.state.simulate_detection(attack_action)
+        if detected:
+            info["detected"] = True
+            reward = self.get_detect_reward()
+
+        if self.ransomgame_config.save_attack_stats:
+            self.attack_detections.append([detected, self.state.stages, self.state.stage_time_spent])
 
         if self.state.done:
             if self.steps_beyond_done is None:
@@ -234,12 +215,10 @@ class RansomGameEnv(gym.Env, ABC):
         :param update_stats: whether the game count should be incremented or not
         :return: the initial state
         """
-        if seed is None:
-            seed = 0
         super().reset(seed=seed)
-        self.action_space.seed(seed)
-        self.attacker_action_space.seed(seed)
-        self.defender_action_space.seed(seed)
+        self.action_space._np_random = self.np_random
+        self.attacker_action_space._np_random = self.np_random
+        self.defender_action_space._np_random = self.np_random
         if self.ransomgame_config.attacker_agent is not None:
             self.ransomgame_config.attacker_agent.np_random = self.np_random
         if self.ransomgame_config.defender_agent is not None:
@@ -373,14 +352,14 @@ class RansomGameEnv(gym.Env, ABC):
         """
         return float(-1), self.state.defense_score(self.ransomgame_config.game_config)
 
-    def get_successful_attack_reward(self, attack_action) -> tuple[Any, float]:
-        """
-        Returns the reward for the attacker and defender after a successful attack on some server in
-        the network
-
-        :return:(attacker_reward, defender_reward)
-        """
-        return self.state.attack_score(self.ransomgame_config.game_config, attack_action), float(0)
+    # def get_successful_attack_reward(self, attack_action) -> tuple[Any, float]:
+    #     """
+    #     Returns the reward for the attacker and defender after a successful attack on some server in
+    #     the network
+    #
+    #     :return:(attacker_reward, defender_reward)
+    #     """
+    #     return self.state.attack_score(self.ransomgame_config.game_config, attack_action), float(0)
 
     def get_observation(self) -> tuple[dict, dict]:
         """
