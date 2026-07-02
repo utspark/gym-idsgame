@@ -412,6 +412,8 @@ class RansomGameEnv(gym.Env, ABC):
         """
 
         n_state_elems = self.ransomgame_config.game_config.stages * 2
+        n_state_elems += len(self.state.stage_time_spent)
+        n_state_elems += 1  # percent_exfiltrated
         n_state_elems += 1  # percent_encrypted
         n_state_elems += 3  # local_detector_score
         n_state_elems += 1  # global_detector_score
