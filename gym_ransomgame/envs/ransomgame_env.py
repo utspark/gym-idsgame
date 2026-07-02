@@ -19,11 +19,16 @@ from gym_idsgame.agents.agent import Agent
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.rendering.viewer import Viewer
 
-class DummyAgent:
+from gym_idsgame.agents.bot_agents.bot_agent import BotAgent
+
+class DummyAgent(BotAgent):
+
     def __init__(self, game_config):
-        self.game_config = game_config
+        super(DummyAgent, self).__init__(game_config)
+
     def action(self, state):
         return 0
+
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_ransomgame.envs.dao.game_state import GameState
 from gym_ransomgame.envs.dao.ransomgame_config import RansomGameConfig
@@ -478,15 +483,14 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
         :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
         if ransomgame_config is None:
-            game_config = GameConfig(manual_attacker=False, num_attack_types=2, max_value=0, manual_defender=False,
+            game_config = GameConfig(manual_attacker=False, num_attack_types=2, max_value=10, manual_defender=False,
                                      initial_state_path=None, ransomware=True)
             game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
             defender_agent = DummyAgent(game_config)
             ransomgame_config = RansomGameConfig(game_config=game_config, defender_agent=defender_agent,
-                                                 attacker_agent=DummyAgent(game_config), initial_state_path=None,
-                                                 render_config=RenderConfig())
+                                                 initial_state_path=None, render_config=RenderConfig())
             ransomgame_config.render_config.caption = "ransomgame-minimal_defense-v0"
         super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir, initial_state_path=None)
 

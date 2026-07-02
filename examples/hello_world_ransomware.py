@@ -1,4 +1,5 @@
 import gymnasium as gym
+from typing import cast
 from gym_ransomgame.envs import RansomGameEnv
 
 
@@ -7,6 +8,7 @@ def attack_against_baseline_defense_env(render=False, seed=None, pause=False):
     version = versions[0]
     env_name = "ransomgame-minimal_defense-v" + str(version)
     env = gym.make(env_name)
+    unwrapped_env = cast(RansomGameEnv, env.unwrapped)
     env.reset(seed=seed)
     done = False
     while not done:
@@ -14,7 +16,7 @@ def attack_against_baseline_defense_env(render=False, seed=None, pause=False):
             env.render()
         if pause:
             input("Press Enter to continue...")
-        attack_action = env.unwrapped.attacker_action_space.sample()
+        attack_action = unwrapped_env.attacker_action_space.sample()
         defense_action = None
         a = (attack_action, defense_action)
         obs, reward, done, truncated, info = env.step(a)

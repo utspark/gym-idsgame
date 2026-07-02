@@ -1,6 +1,7 @@
 """
 Configuration for the ransomgame environment
 """
+from typing import Optional
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_idsgame.agents.agent import Agent
@@ -15,8 +16,8 @@ class RansomGameConfig:
         render_config: RenderConfig,
         game_config: GameConfig,
         defender_agent: Agent,
-        attacker_agent: Agent,
-        initial_state_path: str,
+        attacker_agent: Optional[Agent] = None,
+        initial_state_path: Optional[str] = None,
         save_trajectories :bool = False,
         save_attack_stats : bool = False,
         randomize_env : bool = False,
