@@ -7,7 +7,7 @@ import logging
 import random
 import torch
 from abc import ABC, abstractmethod
-from gym_idsgame.envs.idsgame_env import IdsGameEnv
+from typing import Any
 from gym_idsgame.agents.dao.experiment_result import ExperimentResult
 from gym_idsgame.agents.training_agents.train_agent import TrainAgent
 from gym_idsgame.agents.training_agents.policy_gradient.pg_agent_config import PolicyGradientAgentConfig
@@ -16,10 +16,11 @@ class PolicyGradientAgent(TrainAgent, ABC):
     """
     Abstract PolicyGradient Agent
     """
-    def __init__(self, env:IdsGameEnv, config: PolicyGradientAgentConfig):
+    def __init__(self, env: Any, config: PolicyGradientAgentConfig):
         """
         Initialize environment and hyperparameters
 
+        :param env: the environment
         :param config: the configuration
         """
         self.env = env

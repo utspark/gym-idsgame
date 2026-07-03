@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from numpy import ndarray
 
 from gym_idsgame.envs.constants import constants
-from gym_idsgame.agents.agent import Agent
+# from gym_idsgame.agents.agent import Agent
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.rendering.viewer import Viewer
 
@@ -95,12 +95,11 @@ class RansomGameEnv(gym.Env, ABC):
         }
         self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
-        """
-        self.num_states = self.ransomgame_config.game_config.num_nodes
-        self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1,
-                                            self.ransomgame_config.game_config.num_nodes *
-                                            (self.ransomgame_config.game_config.num_attack_types + 1)))
-        """
+
+        self.n_state_elems = 14
+        self.num_states = self.n_state_elems
+        self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1, self.n_state_elems))
+
         self.num_attack_actions = self.ransomgame_config.game_config.num_attack_actions
         self.num_defense_actions = self.ransomgame_config.game_config.num_defense_actions
         self.past_moves = []
@@ -416,7 +415,7 @@ class RansomGameEnv(gym.Env, ABC):
         :return: the lookup map
         """
 
-        n_state_elems = self.ransomgame_config.game_config.stages * 2
+        n_state_elems = len(self.ransomgame_config.game_config.stages)
         n_state_elems += len(self.state.stage_time_spent)
         n_state_elems += 1  # percent_exfiltrated
         n_state_elems += 1  # percent_encrypted

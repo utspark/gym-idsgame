@@ -7,8 +7,8 @@ import logging
 import random
 import torch
 from abc import ABC, abstractmethod
+from typing import Any
 from gym_idsgame.agents.training_agents.q_learning.q_agent_config import QAgentConfig
-from gym_idsgame.envs.idsgame_env import IdsGameEnv
 from gym_idsgame.agents.dao.experiment_result import ExperimentResult
 from gym_idsgame.agents.training_agents.train_agent import TrainAgent
 
@@ -16,10 +16,11 @@ class QAgent(TrainAgent, ABC):
     """
     Abstract QAgent
     """
-    def __init__(self, env:IdsGameEnv, config: QAgentConfig):
+    def __init__(self, env: Any, config: QAgentConfig):
         """
         Initialize environment and hyperparameters
 
+        :param env: the environment
         :param config: the configuration
         """
         self.env = env
