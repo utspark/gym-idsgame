@@ -81,7 +81,8 @@ class GameState:
         self.time = 0
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated: float = 0.0
+        self.percent_exfiltrated = np.zeros((1, 4), dtype=int)  # exfiltration completion bar
+        # self.percent_exfiltrated: float = 0.0
         self.percent_encrypted: float = 0.0
         self.percent_benign_completed: float = 0.0
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))

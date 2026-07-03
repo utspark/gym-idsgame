@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from numpy import ndarray
 
 from gym_idsgame.envs.constants import constants
-# from gym_idsgame.agents.agent import Agent
+from gym_idsgame.agents.agent import Agent
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.rendering.viewer import Viewer
 
@@ -404,7 +404,7 @@ class RansomGameEnv(gym.Env, ABC):
         self.viewer = Viewer(ransomgame_config=self.ransomgame_config)
         self.viewer.agent_start()
 
-    def _build_state_to_idx_map(self):
+    def build_state_to_idx_map(self):
         # TODO think about what the environment states are
         #  - they are different between attacker and defender
         #  - attack: what stages have been achieved/reached
@@ -416,17 +416,20 @@ class RansomGameEnv(gym.Env, ABC):
         """
 
         n_state_elems = len(self.ransomgame_config.game_config.stages)
-        n_state_elems += len(self.state.stage_time_spent)
+        # n_state_elems += len(self.state.stage_time_spent)
+        # n_state_elems += len(self.state.percent_exfiltrated)
+        """
         n_state_elems += 1  # percent_exfiltrated
         n_state_elems += 1  # percent_encrypted
         n_state_elems += 3  # local_detector_score
         n_state_elems += 1  # global_detector_score
+        """
 
         states = list(
             itertools.product(list(range(self.ransomgame_config.game_config.max_value + 1)), repeat=n_state_elems))
         assert int(len(states)) == int(math.pow(self.ransomgame_config.game_config.max_value + 1, n_state_elems))
-        state_to_idx = {}
 
+        state_to_idx = {}
         for idx, s in enumerate(states):
             state_to_idx[s] = idx
         return state_to_idx
