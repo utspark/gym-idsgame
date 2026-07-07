@@ -19,7 +19,7 @@ class GameConfig:
             ransomware: bool = False,
             manual_attacker: bool = True,
             num_attack_types: int = 10,
-            max_value: int = 5,
+            max_value: int = 1,
 
             manual_defender: bool = False,
             initial_state_path: Optional[str] = None,

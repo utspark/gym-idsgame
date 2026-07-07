@@ -96,7 +96,7 @@ class RansomGameEnv(gym.Env, ABC):
         self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
 
-        self.n_state_elems = 14
+        self.n_state_elems = 4
         self.num_states = self.n_state_elems
         self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1, self.n_state_elems))
 
@@ -118,7 +118,7 @@ class RansomGameEnv(gym.Env, ABC):
         self.failed_attacks = {}
 
     # -------- API ------------
-    def step(self, action: Any) -> tuple[dict, float, bool, bool, dict]:
+    def step(self, action: Any) -> tuple[tuple[dict, dict], tuple[float, float], bool, bool, dict]:
         """
         Takes a step in the environment using the given action.
 
@@ -139,8 +139,8 @@ class RansomGameEnv(gym.Env, ABC):
         info = {"detected": False}
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
-            obs, _ = self.get_observation()
-            return obs, float(100*constants.GAME_CONFIG.NEGATIVE_REWARD), True, False, info
+            obs = self.get_observation()
+            return obs, (float(100*constants.GAME_CONFIG.NEGATIVE_REWARD), 0), True, False, info
 
         attack_action, defense_action = action
 
@@ -197,7 +197,7 @@ class RansomGameEnv(gym.Env, ABC):
                 self.steps_beyond_done += 1
         self.state.game_step += 1
         self.state.time += 1
-        obs, _ = self.get_observation()
+        obs = self.get_observation()
         if self.viewer is not None:
             self.viewer.gameframe.set_state(self.state)
 
@@ -208,7 +208,8 @@ class RansomGameEnv(gym.Env, ABC):
         trajectory.append(self.state)
         if self.ransomgame_config.save_trajectories:
             self.game_trajectories.append(trajectory)
-        return obs, float(reward[0]), self.state.done, False, info
+        # return obs, float(reward[0]), self.state.done, False, info
+        return obs, reward, self.state.done, False, info
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None, update_stats: bool = False) -> tuple[dict, dict]:
         """
@@ -243,11 +244,11 @@ class RansomGameEnv(gym.Env, ABC):
         self.d_cumulative_reward = 0
         if self.viewer is not None:
             self.viewer.gameframe.reset()
-        obs, _ = self.get_observation()
+        attacker_obs, defender_obs = self.get_observation()
         self.defenses = []
         self.attacks = []
         self.num_failed_attacks = 0
-        return obs, {}
+        return attacker_obs, defender_obs
 
     def restart(self) -> dict:
         """
@@ -434,6 +435,30 @@ class RansomGameEnv(gym.Env, ABC):
             state_to_idx[s] = idx
         return state_to_idx
 
+    def get_state_id(self, observation: Any) -> int:
+        """
+        Convert a RansomGame attacker observation into a stable integer state id.
+        """
+        state_key = (
+            # int(observation["time"]),
+            tuple(int(x) for x in observation["stages"]),
+        )
+        # TODO fix this later when expanding state
+        state_key = state_key[0]
+
+        if state_key not in self.state_to_idx:
+            next_state_id = len(self.state_to_idx)
+
+            # if next_state_id >= self.Q_attacker.shape[0]:
+            #     raise RuntimeError(
+            #         "RansomTabularQAgent discovered more states than Q_attacker was initialized for. "
+            #         "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
+            #     )
+
+            self.state_to_idx[state_key] = next_state_id
+
+        return self.state_to_idx[state_key]
+
 
 class AttackerEnv(RansomGameEnv, ABC):
     """
@@ -485,7 +510,7 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
         :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
         if ransomgame_config is None:
-            game_config = GameConfig(manual_attacker=False, num_attack_types=2, max_value=10, manual_defender=False,
+            game_config = GameConfig(manual_attacker=False, num_attack_types=2, manual_defender=False,
                                      initial_state_path=None, ransomware=True)
             game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:

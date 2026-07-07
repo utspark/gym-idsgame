@@ -144,6 +144,7 @@ class GameState:
         self.attack_defense_type = 0
         self.num_hacks = 0
         self.hacked = False
+        self.attack_successful = False
 
 
     def set_state(
@@ -221,6 +222,7 @@ class GameState:
             self.set_state(num_attack_types)
         self.detected = False
         self.hacked = False
+        self.attack_successful = False
 
     def copy(self) -> "GameState":
         """
@@ -233,7 +235,8 @@ class GameState:
             setattr(new_state, attr, np.copy(getattr(self, attr)))
         
         for attr in ['time', 'game_step', 'attacker_cumulative_reward', 'defender_cumulative_reward',
-                    'num_games', 'done', 'detected', 'attack_defense_type', 'num_hacks', 'hacked', 'np_random']:
+                    'num_games', 'done', 'detected', 'attack_defense_type', 'num_hacks', 'hacked', 'np_random',
+                    'attack_successful']:
             setattr(new_state, attr, getattr(self, attr))
             
         new_state.attack_events = list(self.attack_events)
@@ -336,6 +339,7 @@ class GameState:
             if attack_type == self.ENCRYPTION:
                 reward += self.ATTACK_REWARD
                 self.attack_successful = True
+                self.hacked = True
                 self.done = True
 
         return reward, 0
@@ -411,7 +415,6 @@ class GameState:
         :return: An observation of the environment
         """
         attacker_observation = {
-            "time": int(self.time),
             "stages": self.stages.flatten().astype(int)
         }
         return attacker_observation
@@ -465,7 +468,6 @@ class GameState:
         :return: An observation of the environment
         """
         defender_observation = {
-            "time": int(self.time),
             "local_detector_scores": self.local_detector_scores.astype(np.float32),
             "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
         }
