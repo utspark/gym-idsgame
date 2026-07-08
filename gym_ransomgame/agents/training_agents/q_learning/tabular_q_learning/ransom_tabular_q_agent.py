@@ -30,27 +30,27 @@ class RansomTabularQAgent(QAgent):
         self.env.ransomgame_config.save_trajectories = False
         self.env.ransomgame_config.save_attack_stats = True
 
-    def get_state_id(self, observation: Any) -> int:
-        """
-        Convert a RansomGame attacker observation into a stable integer state id.
-        """
-        state_key = (
-            # int(observation["time"]),
-            tuple(int(x) for x in observation["stages"]),
-        )
-
-        if state_key not in self.state_to_idx:
-            next_state_id = len(self.state_to_idx)
-
-            if next_state_id >= self.Q_attacker.shape[0]:
-                raise RuntimeError(
-                    "RansomTabularQAgent discovered more states than Q_attacker was initialized for. "
-                    "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
-                )
-
-            self.state_to_idx[state_key] = next_state_id
-
-        return self.state_to_idx[state_key]
+    # def get_state_id(self, observation: Any) -> int:
+    #     """
+    #     Convert a RansomGame attacker observation into a stable integer state id.
+    #     """
+    #     state_key = (
+    #         # int(observation["time"]),
+    #         tuple(int(x) for x in observation["stages"]),
+    #     )
+    #
+    #     if state_key not in self.state_to_idx:
+    #         next_state_id = len(self.state_to_idx)
+    #
+    #         if next_state_id >= self.Q_attacker.shape[0]:
+    #             raise RuntimeError(
+    #                 "RansomTabularQAgent discovered more states than Q_attacker was initialized for. "
+    #                 "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
+    #             )
+    #
+    #         self.state_to_idx[state_key] = next_state_id
+    #
+    #     return self.state_to_idx[state_key]
 
     def get_action(self, s: int, eval: bool = False, attacker: bool = True) -> int:
         """
@@ -122,7 +122,7 @@ class RansomTabularQAgent(QAgent):
 
                 # Get attacker and defender actions
                 if self.config.attacker:
-                    s_idx_a = self.get_state_id(attacker_obs)
+                    s_idx_a = self.env.get_state_id(attacker_obs)
                     if self.config.tab_full_state_space:
                         if self.env.fully_observed():
                             attacker_obs = np.append(attacker_obs, defender_obs)
@@ -202,7 +202,7 @@ class RansomTabularQAgent(QAgent):
 
             # Reset environment for the next episode and update game stats
             done = False
-            obs, _ = self.env.reset(update_stats=True)
+            obs = self.env.reset(update_stats=True)
             attacker_obs, defender_obs = obs
             self.outer_train.update(1)
 
@@ -317,9 +317,9 @@ class RansomTabularQAgent(QAgent):
         attacker_obs, defender_obs = obs
 
         # Get initial frame
-        if self.config.video or self.config.gifs:
-            initial_frame = self.env.render(mode="rgb_array")[0]
-            self.env.episode_frames.append(initial_frame)
+        # if self.config.video or self.config.gifs:
+        #     initial_frame = self.env.render(mode="rgb_array")[0]
+        #     self.env.episode_frames.append(initial_frame)
 
         for episode in range(self.config.eval_episodes):
             episode_attacker_reward = 0
@@ -458,12 +458,12 @@ class RansomTabularQAgent(QAgent):
 
             # Reset for new eval episode
             done = False
-            obs, _ = self.env.reset(update_stats=False)
+            obs = self.env.reset(update_stats=False)
             attacker_obs, defender_obs = obs
             # Get initial frame
-            if self.config.video or self.config.gifs:
-                initial_frame = self.env.render(mode="rgb_array")[0]
-                self.env.episode_frames.append(initial_frame)
+            # if self.config.video or self.config.gifs:
+            #     initial_frame = self.env.render(mode="rgb_array")[0]
+            #     self.env.episode_frames.append(initial_frame)
 
             self.outer_eval.update(1)
 
@@ -479,3 +479,44 @@ class RansomTabularQAgent(QAgent):
         self.env.close()
         self.config.logger.info("Evaluation Complete")
         return self.eval_result
+
+    def log_state_values(self) -> None:
+        """
+        Utility function for printing the state-values according to the learned Q-function
+
+        :return: None
+        """
+        if self.config.attacker:
+            self.config.logger.info("--- Attacker State Values ---")
+            for i in range(len(self.Q_attacker)):
+                state_value = sum(self.Q_attacker[i])
+                node_id = i
+                self.config.logger.info("s:{},V(s):{}".format(node_id, state_value))
+            self.config.logger.info("--------------------")
+
+        if self.config.defender:
+            self.config.logger.info("--- Defender State Values ---")
+            for i in range(len(self.Q_defender)):
+                state_value = sum(self.Q_defender[i])
+                node_id = i
+                self.config.logger.info("s:{},V(s):{}".format(node_id, state_value))
+            self.config.logger.info("--------------------")
+
+    def save_q_table(self) -> None:
+        """
+        Saves Q table to disk in binary npy format
+
+        :return: None
+        """
+        time_str = str(time.time())
+        if self.config.save_dir is not None:
+            if self.config.attacker:
+                path = self.config.save_dir + "/" + time_str + "_attacker_q_table.npy"
+                self.config.logger.info("Saving Q-table to: {}".format(path))
+                np.save(path, self.Q_attacker)
+            if self.config.defender:
+                path = self.config.save_dir + "/" + time_str + "_defender_q_table.npy"
+                self.config.logger.info("Saving Q-table to: {}".format(path))
+                np.save(path, self.Q_defender)
+        else:
+            self.config.logger.warning("Save path not defined, not saving Q table to disk")
