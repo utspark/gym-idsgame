@@ -460,30 +460,6 @@ class RansomGameEnv(gym.Env, ABC):
 
         return self.state_to_idx[state_key]
 
-    def get_state_id(self, observation: Any) -> int:
-        """
-        Convert a RansomGame attacker observation into a stable integer state id.
-        """
-        state_key = (
-            # int(observation["time"]),
-            tuple(int(x) for x in observation["stages"]),
-        )
-        # TODO fix this later when expanding state
-        state_key = state_key[0]
-
-        if state_key not in self.state_to_idx:
-            next_state_id = len(self.state_to_idx)
-
-            # if next_state_id >= self.Q_attacker.shape[0]:
-            #     raise RuntimeError(
-            #         "RansomTabularQAgent discovered more states than Q_attacker was initialized for. "
-            #         "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
-            #     )
-
-            self.state_to_idx[state_key] = next_state_id
-
-        return self.state_to_idx[state_key]
-
 
 class AttackerEnv(RansomGameEnv, ABC):
     """
