@@ -80,7 +80,17 @@ class RansomGameEnv(gym.Env, ABC):
         self.ransomgame_config: RansomGameConfig = ransomgame_config
         if self.ransomgame_config.game_config.initial_state is None:
             raise ValueError("initial_state cannot be None")
-        self.state: GameState = self.ransomgame_config.game_config.initial_state
+
+        self.ransomgame_config.game_config.initial_state.set_state(
+            time=0,
+            stages=np.zeros((1, 4)),
+            percent_encrypted=0.0,
+            percent_benign_completed=0.0,
+            local_detector_scores=np.zeros((1, 4)),
+            global_detector_score=0.0,
+        )
+        self.state = self.ransomgame_config.game_config.initial_state.copy()
+        self.state = self.ransomgame_config.game_config.initial_state
         self.state_to_idx = self.build_state_to_idx_map()
         self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
         self.action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
@@ -417,7 +427,8 @@ class RansomGameEnv(gym.Env, ABC):
         :return: the lookup map
         """
 
-        n_state_elems = len(self.ransomgame_config.game_config.stages)
+        n_state_elems = self.ransomgame_config.game_config.stages.shape[1]
+        # TODO fix this as state expands
         # n_state_elems += len(self.state.stage_time_spent)
         # n_state_elems += len(self.state.percent_exfiltrated)
         """

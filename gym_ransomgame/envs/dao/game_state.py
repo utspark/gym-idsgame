@@ -212,6 +212,13 @@ class GameState:
         self.attack_history = []
         self.defense_events = []
         self.defense_history = []
+        self.stages = np.zeros((1, 4))
+        self.stage_time_spent = np.zeros((1, 4), dtype=int)
+        self.percent_exfiltrated = np.zeros((1, 4), dtype=int)
+        self.percent_encrypted = 0.0
+        self.percent_benign_completed = 0.0
+        self.local_detector_scores = np.zeros((1, 4))
+        self.global_detector_score = 0.0
         if np_random is not None:
             self.np_random = np_random
         

@@ -98,9 +98,9 @@ class RansomTabularQAgent(QAgent):
         episode_steps = []
 
         # Logging
-        self.outer_train.set_description_str("[Train] epsilon:{:.2f},avg_a_R:{:.2f},avg_d_R:{:.2f},"
-                                             "avg_t:{:.2f},avg_h:{:.2f},acc_A_R:{:.2f}," \
-                                             "acc_D_R:{:.2f}".format(self.config.epsilon, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        self.outer_train.set_description_str("[Train] epsilon: {:.2f}, avg_a_R: {:.2f}, avg_d_R: {:.2f}, "
+                                             "avg_t: {:.2f}, avg_h: {:.2f}, acc_A_R: {:.2f}, "
+                                             "acc_D_R: {:.2f}".format(self.config.epsilon, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
         # Training
         for episode in range(self.config.num_episodes):
@@ -188,7 +188,11 @@ class RansomTabularQAgent(QAgent):
 
             # Run evaluation every <self.config.eval_frequency> episodes
             if episode % self.config.eval_frequency == 0:
+                print("\n\n" + "-" * 50 + "\n\n")
+                time.sleep(1.0)
                 self.eval(episode)
+                print("\n\n" + "-" * 50 + "\n\n")
+                time.sleep(1.0)
 
             # Save Q table every <self.config.checkpoint_frequency> episodes
             if episode % self.config.checkpoint_freq == 0:
@@ -212,7 +216,11 @@ class RansomTabularQAgent(QAgent):
         self.config.logger.info("Training Complete")
 
         # Final evaluation (for saving Gifs etc)
+        print("\n\n" + "-" * 50 + "\n\n")
+        time.sleep(1.0)
         self.eval(self.config.num_episodes, log=False)
+        print("\n\n" + "-" * 50 + "\n\n")
+        time.sleep(1.0)
 
         # Log and return
         self.log_state_values()
@@ -286,8 +294,7 @@ class RansomTabularQAgent(QAgent):
         self.num_eval_games = 0
         self.num_eval_hacks = 0
 
-        if len(self.eval_result.avg_episode_steps) > 0:
-            self.config.logger.warning("starting eval with non-empty result object")
+        self.eval_result = ExperimentResult()
         if self.config.eval_episodes < 1:
             return
         done = False
@@ -307,10 +314,10 @@ class RansomTabularQAgent(QAgent):
         episode_steps = []
 
         # Logging
-        self.outer_eval = tqdm.tqdm(total=self.config.eval_episodes, desc='Eval Episode', position=1)
-        self.outer_eval.set_description_str(
-            "[Eval] avg_a_R:{:.2f},avg_d_R:{:.2f},avg_t:{:.2f},avg_h:{:.2f},acc_A_R:{:.2f}," \
-            "acc_D_R:{:.2f}".format(0.0, 0,0, 0.0, 0.0, 0.0, 0.0))
+        self.outer_eval = tqdm.tqdm(total=self.config.eval_episodes, desc='', position=1)
+        # self.outer_eval.set_description_str(
+        #     "[Eval] avg_a_R: {:.2f}, avg_d_R: {:.2f}, avg_t: {:.2f}, avg_h: {:.2f}, acc_A_R: {:.2f}, "
+        #     "acc_D_R: {:.2f}".format(0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
         # Eval
         obs = self.env.reset(update_stats=False)
@@ -406,7 +413,7 @@ class RansomTabularQAgent(QAgent):
             # if self.config.eval_render:
             #     self.env.render()
             #     time.sleep(self.config.eval_sleep)
-            self.config.logger.info("Eval episode: {}, Game ended after {} steps".format(episode, episode_step))
+            self.config.logger.info("Eval episode: {:>5}, Game ended after {} steps".format(episode, episode_step))
 
             # Record episode metrics
             episode_attacker_rewards.append(episode_attacker_reward)
@@ -476,6 +483,7 @@ class RansomTabularQAgent(QAgent):
             self.log_metrics(train_episode, self.eval_result, episode_attacker_rewards, episode_defender_rewards,
                              episode_steps, update_stats=True, eval=True)
 
+        self.outer_eval.close()
         self.env.close()
         self.config.logger.info("Evaluation Complete")
         return self.eval_result
@@ -491,7 +499,7 @@ class RansomTabularQAgent(QAgent):
             for i in range(len(self.Q_attacker)):
                 state_value = sum(self.Q_attacker[i])
                 node_id = i
-                self.config.logger.info("s:{},V(s):{}".format(node_id, state_value))
+                self.config.logger.info("s: {}, V(s): {}".format(node_id, state_value))
             self.config.logger.info("--------------------")
 
         if self.config.defender:
@@ -499,7 +507,7 @@ class RansomTabularQAgent(QAgent):
             for i in range(len(self.Q_defender)):
                 state_value = sum(self.Q_defender[i])
                 node_id = i
-                self.config.logger.info("s:{},V(s):{}".format(node_id, state_value))
+                self.config.logger.info("s: {}, V(s): {}".format(node_id, state_value))
             self.config.logger.info("--------------------")
 
     def save_q_table(self) -> None:
