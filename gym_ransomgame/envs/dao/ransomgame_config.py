@@ -52,8 +52,8 @@ class RansomGameConfig:
             self.render_config = RenderConfig()
         # if self.game_config is None:
         #     self.game_config = RansomGameConfig(initial_state_path=initial_state_path)
-        self.render_config.set_height(self.game_config.num_rows)
-        self.render_config.set_width(self.game_config.num_cols)
+        # self.render_config.set_height(self.game_config.num_rows)
+        # self.render_config.set_width(self.game_config.num_cols)
         self.save_trajectories = save_trajectories
         self.save_attack_stats = save_attack_stats
         self.randomize_env = randomize_env

@@ -20,12 +20,14 @@ class GameState:
     COMPRESSION = 1
     EXFILTRATION = 2
     ENCRYPTION = 3
+    IDLE = 4
 
     # Reward Constants
     DEFAULT_REWARD = -0.1
     PROGRESS_REWARD = 0.2
     STAGE_REWARD = 0.5
-    ATTACK_REWARD = 3
+    EXFILTRATION_REWARD = 1.5
+    ENCRYPTION_REWARD = 2.5
 
     ATTACK_CONFIGS = MappingProxyType({
         RECONNAISSANCE: (0.1, 0.1),
@@ -78,13 +80,12 @@ class GameState:
         :param hacked: True if the attacker hacked the data node otherwise False
         """
         self.attack_successful = False
-        self.time = 0
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated = np.zeros((1, 4), dtype=int)  # exfiltration completion bar
+        self.percent_exfiltrated = np.zeros((1, 4), dtype=bool)  # exfiltration completion bar
         # self.percent_exfiltrated: float = 0.0
-        self.percent_encrypted: float = 0.0
-        self.percent_benign_completed: float = 0.0
+        self.percent_encrypted = np.zeros((1, 4), dtype=bool)
+        self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
         self.global_detector_score: float = 0.0
 
@@ -111,8 +112,8 @@ class GameState:
     def default_state(
         self,
         num_attack_types: int,
-        num_rows: int = 10,
-        num_cols: int = 10,
+        # num_rows: int = 10,
+        # num_cols: int = 10,
         randomize_state: bool = False,
         randomize_visibility: bool = False,
         visibility_p: float = 0.5,
@@ -126,10 +127,10 @@ class GameState:
         :param visibility_p: probability of visibility
         :return: None
         """
-        self.set_state(0, np.zeros((1, 4)), 0.0, 0.0, np.zeros((1, 4)), 0.0)
-        self.defense_det = np.zeros((num_rows * num_cols, num_attack_types))
-        self.defense_values = np.zeros((num_rows * num_cols, num_attack_types))
-        self.attack_values = np.zeros((num_rows * num_cols, num_attack_types))
+        self.set_state(np.zeros((1, 4)), 0.0, 0.0, np.zeros((1, 4)), 0.0)
+        # self.defense_det = np.zeros((num_rows * num_cols, num_attack_types))
+        # self.defense_values = np.zeros((num_rows * num_cols, num_attack_types))
+        # self.attack_values = np.zeros((num_rows * num_cols, num_attack_types))
         self.attacker_pos = (0, 0)
         self.game_step = 0
         self.attacker_cumulative_reward = 0.0
@@ -149,28 +150,28 @@ class GameState:
 
     def set_state(
         self,
-        time: int,
         stages: Optional[np.ndarray] = None,
-        percent_encrypted: float = 0.0,
-        percent_benign_completed: float = 0.0,
+        percent_exfiltrated = None,
+        percent_encrypted = None,
+        percent_benign_completed = None,
         local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0.0,
     ):
         """
         Sets the state
 
-        :param time: current time
         :param stages: stages array
-        :param percent_encrypted: percent encrypted
-        :param percent_benign_completed: percent benign completed
+        :param percent_exfiltrated: percent exfiltrated as progress bar
+        :param percent_encrypted: percent encrypted as progress bar
+        :param percent_benign_completed: percent benign completed as progress bar
         :param local_detector_scores: local detector scores
         :param global_detector_score: global detector score
         :return: None
         """
-        self.time = time
         self.stages = stages if stages is not None else np.zeros((1, 4))
-        self.percent_encrypted = percent_encrypted
-        self.percent_benign_completed = percent_benign_completed
+        self.percent_exfiltrated = percent_exfiltrated if percent_exfiltrated is not None else np.zeros((1, 4), dtype=np.bool)
+        self.percent_encrypted = percent_encrypted if percent_encrypted is not None else np.zeros((1, 4), dtype=np.bool)
+        self.percent_benign_completed = percent_benign_completed if percent_benign_completed is not None else np.zeros((1, 4), dtype=np.bool)
         self.local_detector_scores = local_detector_scores if local_detector_scores is not None else np.zeros((1, 4))
         self.global_detector_score = global_detector_score
 
@@ -205,7 +206,6 @@ class GameState:
                 if self.hacked:
                     self.num_hacks += 1
         self.done = False
-        self.time = 0
         self.attack_defense_type = 0
         self.game_step = 0
         self.attack_events = []
@@ -214,9 +214,9 @@ class GameState:
         self.defense_history = []
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated = np.zeros((1, 4), dtype=int)
-        self.percent_encrypted = 0.0
-        self.percent_benign_completed = 0.0
+        self.percent_exfiltrated = np.zeros((1, 4), dtype=bool)
+        self.percent_encrypted = np.zeros((1, 4), dtype=bool)
+        self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores = np.zeros((1, 4))
         self.global_detector_score = 0.0
         if np_random is not None:
@@ -241,7 +241,7 @@ class GameState:
         for attr in ['attack_values', 'defense_values', 'defense_det']:
             setattr(new_state, attr, np.copy(getattr(self, attr)))
         
-        for attr in ['time', 'game_step', 'attacker_cumulative_reward', 'defender_cumulative_reward',
+        for attr in ['game_step', 'attacker_cumulative_reward', 'defender_cumulative_reward',
                     'num_games', 'done', 'detected', 'attack_defense_type', 'num_hacks', 'hacked', 'np_random',
                     'attack_successful']:
             setattr(new_state, attr, getattr(self, attr))
@@ -279,8 +279,11 @@ class GameState:
         return 1 - (1 - p_base) * (1 - p_progress) ** (n - 1)
 
     def get_consecutive_attack_attempts(self, attack_type: int) -> int:
+        history_len = 10
         consecutive_attempts = 0
-        for k, g in groupby(reversed(self.attack_history)):
+        attack_history = self.attack_history[history_len:] if len(self.attack_history) > history_len else self.attack_history
+
+        for k, g in groupby(reversed(attack_history)):
             if k == attack_type:
                 consecutive_attempts = len(list(g))
             break
@@ -303,13 +306,18 @@ class GameState:
 
         assert self.np_random is not None
 
-        self.stage_time_spent[0, attack_type] = self.get_consecutive_attack_attempts(attack_type)
+        if attack_type < self.stage_time_spent.shape[1]:
+            self.stage_time_spent[0, attack_type] = self.get_consecutive_attack_attempts(attack_type)
 
+        # no reward for benign
+        if attack_type >= self.stages.shape[1]:
+            return reward, 0
+
+        # penalize staying in completed stages
         if self.stages[0, attack_type] == 1:
             return reward, 0
 
-        if attack_type != self.RECONNAISSANCE:
-            reward += self.PROGRESS_REWARD
+        reward += self.PROGRESS_REWARD
 
         if exponential:
             p = self.get_attack_probability(attack_type)
@@ -318,11 +326,17 @@ class GameState:
             
             # Update progress percentages
             if attack_type == self.EXFILTRATION:
-                self.percent_exfiltrated = p
+                for i, trip in enumerate(np.linspace(0.01, 0.501, num=self.percent_exfiltrated.shape[1])):
+                    if p > trip:
+                        self.percent_exfiltrated[0, i] = 1
+
             elif attack_type == self.ENCRYPTION:
-                self.percent_encrypted = p
+                for i, trip in enumerate(np.linspace(0.01, 0.501, num=self.percent_encrypted.shape[1])):
+                    if p >= trip:
+                        self.percent_encrypted[0, i] = 1
             
             stage_success = self.np_random.binomial(1, p) == 1
+
         else:
             requirement = self._get_consecutive_attack_requirement(attack_type)
             consecutive = self.get_consecutive_attack_attempts(attack_type)
@@ -333,9 +347,14 @@ class GameState:
             # Update progress percentages
             progress = consecutive / requirement
             if attack_type == self.EXFILTRATION:
-                self.percent_exfiltrated = progress
+                for trip in np.linspace(0, 1, num=self.percent_exfiltrated.shape[1]):
+                    if progress > trip:
+                        self.percent_exfiltrated[0, trip] = 1
+
             elif attack_type == self.ENCRYPTION:
-                self.percent_encrypted = progress
+                for trip in np.linspace(0, 1, num=self.percent_encrypted.shape[1]):
+                    if progress > trip:
+                        self.percent_encrypted[0, trip] = 1
             
             stage_success = consecutive >= requirement
 
@@ -343,46 +362,18 @@ class GameState:
             self.stages[0, attack_type] = 1
             reward += self.STAGE_REWARD
 
+            if attack_type == self.EXFILTRATION:
+                reward += self.EXFILTRATION_REWARD
+                self.percent_exfiltrated = np.ones(self.percent_exfiltrated.shape, dtype=bool)
+
             if attack_type == self.ENCRYPTION:
-                reward += self.ATTACK_REWARD
+                reward += self.ENCRYPTION_REWARD
+                self.percent_encrypted = np.ones(self.percent_encrypted.shape, dtype=bool)
                 self.attack_successful = True
                 self.hacked = True
                 self.done = True
 
         return reward, 0
-
-    # def simulate_attack(self, attack_type: int, np_random: Optional[np.random.Generator] = None,
-    #                     exponential: bool = True) -> bool:
-    #     """
-    #     Simulates the outcome of an attack.
-    #     """
-    #     if self.stages[0, attack_type] == 1:
-    #         return False
-    #
-    #     np_random = np_random or self.np_random
-    #     assert np_random is not None
-    #
-    #     consecutive = self.get_consecutive_attack_attempts(attack_type)
-    #
-    #     if not exponential:
-    #         if attack_type in (self.EXFILTRATION, self.ENCRYPTION):
-    #             if attack_type == self.EXFILTRATION:
-    #                 self.percent_exfiltrated += 0.2
-    #                 return self.percent_exfiltrated >= 1.0
-    #             else:
-    #                 self.percent_encrypted += 0.2
-    #                 return self.percent_encrypted >= 1.0
-    #         else:
-    #             raise ValueError("Invalid attack type for linear simulation approach")
-    #
-    #     p_base, p_progress = self.ATTACK_CONFIGS.get(attack_type, (0.1, 0.1))
-    #     p = self._calculate_exponential_probability(p_base, p_progress, consecutive)
-    #
-    #     if attack_type == self.EXFILTRATION and self.stages[0, self.COMPRESSION] == 1:
-    #         p += 0.4
-    #
-    #     p = np.clip(p, 0, 1)
-    #     return np_random.binomial(1, p) == 1
 
     def simulate_detection(self, attack_type: int) -> bool:
         """
@@ -394,7 +385,7 @@ class GameState:
         """
         assert self.np_random is not None
 
-        if attack_type == -1:
+        if attack_type >= self.stages.shape[1]:
             return False
 
         p = np.sum(self.stage_time_spent[0, attack_type]) / 100
@@ -411,7 +402,7 @@ class GameState:
         if not game_config.ransomware:
             return -1
         else:
-            return 1 - self.percent_encrypted
+            return float(np.mean(1 - self.percent_encrypted))
 
     def get_attacker_observation(self) -> dict[str, int | np.ndarray]:
         """
@@ -422,7 +413,9 @@ class GameState:
         :return: An observation of the environment
         """
         attacker_observation = {
-            "stages": self.stages.flatten().astype(int)
+            "stages": self.stages.flatten().astype(int),
+            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
+            "percent_exfiltrated": self.percent_exfiltrated.flatten().astype(int),
         }
         return attacker_observation
 

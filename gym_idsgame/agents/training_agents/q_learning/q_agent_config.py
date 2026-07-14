@@ -9,9 +9,15 @@ class QAgentConfig:
     DTO with configuration for QAgent
     """
 
-    def __init__(self, gamma :float = 0.8, alpha:float = 0.1, epsilon :float =0.9, render :bool =False,
+    def __init__(self,
+                 gamma :float = 0.8,
+                 alpha:float = 0.1,
+                 epsilon :float =0.9,
+                 render :bool =False,
                  eval_sleep :float = 0.35,
-                 epsilon_decay :float = 0.999, min_epsilon :float = 0.1, eval_episodes :int = 1,
+                 epsilon_decay :float = 0.999,
+                 min_epsilon :float = 0.1,
+                 eval_episodes :int = 1,
                  train_log_frequency :int =100,
                  eval_log_frequency :int =1, video :bool = False, video_fps :int = 5, video_dir :bool = None,
                  num_episodes :int = 5000,
@@ -19,7 +25,9 @@ class QAgentConfig:
                  video_frequency :int = 101, attacker :bool = True, defender :bool = False,
                  save_dir :str = None, attacker_load_path : str = None, defender_load_path : str = None,
                  dqn_config: DQNConfig = None,
-                 checkpoint_freq : int = 100000, random_seed: int = 0, eval_epsilon : float = 0.0,
+                 checkpoint_freq : int = 100000,
+                 random_seed: int = 0,
+                 eval_epsilon : float = 0.0,
                  tab_full_state_space : bool = False):
         """
         Initialize environment and hyperparameters

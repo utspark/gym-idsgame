@@ -38,21 +38,22 @@ class GameConfig:
         """
         self.ransomware = ransomware
         self.time = 0
-        self.stages = np.zeros((1, 4))
-        self.percent_encrypted = 0
+        self.stages = np.zeros((1, 4), dtype=np.bool)
+        self.percent_exfiltrated = np.zeros((1, 4), dtype=np.bool)
+        self.percent_encrypted = np.zeros((1, 4), dtype=np.bool)
         self.benign_completed = 0
         self.local_detector_scores = np.zeros((1, 4))
         self.global_detector_score = 0
-        self.num_rows = 10
-        self.num_cols = 10
+        # self.num_rows = 10
+        # self.num_cols = 10
         self.manual_attacker = manual_attacker
         self.manual_defender = manual_defender
         self.num_attack_types = num_attack_types
         self.max_value = max_value
-        self.num_attack_actions = 4
+        self.num_attack_actions = 5
         self.num_defense_actions = 4
         self.num_states = 1
-        self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)
+        # self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)
         self.initial_state_path = initial_state_path
         # self.num_vulnerabilities_per_layer = None
         self.initial_state: GameState = initial_state # type: ignore
@@ -74,9 +75,10 @@ class GameConfig:
 
     def set_initial_state(
             self,
-            time: int = 0,
-            stages = np.zeros((1, 4)),
-            percent_encrypted: float = 0,
+            # time: int = 0,
+            stages = np.zeros((1, 4), dtype=np.bool),
+            percent_exfiltrated = np.zeros((1, 4), dtype=np.bool),
+            percent_encrypted = np.zeros((1, 4), dtype=np.bool),
             percent_benign_completed: float = 0,
             local_detector_scores: np.ndarray = np.zeros((1, 4)),
             global_detector_score: float = 0,
@@ -90,8 +92,9 @@ class GameConfig:
         :return:
         """
         self.initial_state.set_state(
-            time=time,
+            # time=time,
             stages=stages,
+            percent_exfiltrated=percent_exfiltrated,
             percent_encrypted=percent_encrypted,
             percent_benign_completed=percent_benign_completed,
             local_detector_scores=local_detector_scores,
@@ -105,8 +108,10 @@ class GameConfig:
         :return: observation space
         """
         observation_space = gym.spaces.Dict({
-            "time": Discrete(n=300, start=0, dtype=np.int32),
-            "stages": gym.spaces.MultiBinary(n=4)
+            # "time": Discrete(n=300, start=0, dtype=np.int32),
+            "stages": gym.spaces.MultiBinary(n=4),
+            "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
+            "percent_encrypted": gym.spaces.MultiBinary(n=4),
         })
         return observation_space
 
@@ -117,7 +122,6 @@ class GameConfig:
         :return: observation space
         """
         observation_space = gym.spaces.Dict({
-            "time": Discrete(n=200, start=0, dtype=np.int32),
             "local_detector_scores": gym.spaces.Box(low=0, high=10, shape=(1, 4), dtype=np.float32),
             "global_detector_score": gym.spaces.Box(low=0, high=10, shape=(1,), dtype=np.float32),
         })

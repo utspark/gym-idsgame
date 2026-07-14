@@ -41,7 +41,8 @@ def default_output_dir() -> str:
 if __name__ == '__main__':
     random_seed = 0
     load_q_table = True
-    q_table_filename = "1783912346.7335558_attacker_q_table.npy"
+    table_tag = "1784037638.6862357"
+    q_table_filename = table_tag + "_attacker_q_table.npy"
 
     create_artefact_dirs(default_output_dir(), random_seed)
     q_agent_config = QAgentConfig(gamma=0.999, alpha=0.0005, epsilon=1, render=False, eval_sleep=0.9,

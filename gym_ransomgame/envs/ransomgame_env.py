@@ -82,10 +82,11 @@ class RansomGameEnv(gym.Env, ABC):
             raise ValueError("initial_state cannot be None")
 
         self.ransomgame_config.game_config.initial_state.set_state(
-            time=0,
+            # time=0,
             stages=np.zeros((1, 4)),
-            percent_encrypted=0.0,
-            percent_benign_completed=0.0,
+            percent_exfiltrated=np.zeros((1, 4), dtype=bool),
+            percent_encrypted=np.zeros((1, 4), dtype=bool),
+            percent_benign_completed=np.zeros((1, 4), dtype=bool),
             local_detector_scores=np.zeros((1, 4)),
             global_detector_score=0.0,
         )
@@ -107,7 +108,7 @@ class RansomGameEnv(gym.Env, ABC):
         self._gym_version = gym.__version__
         self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
 
-        self.n_state_elems = 4
+        self.n_state_elems = 12
         self.num_states = self.n_state_elems
         self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1, self.n_state_elems))
 
@@ -207,7 +208,7 @@ class RansomGameEnv(gym.Env, ABC):
                     "any further steps are undefined behavior.")
                 self.steps_beyond_done += 1
         self.state.game_step += 1
-        self.state.time += 1
+        # self.state.time += 1
         obs = self.get_observation()
         if self.viewer is not None:
             self.viewer.gameframe.set_state(self.state)
@@ -430,7 +431,8 @@ class RansomGameEnv(gym.Env, ABC):
         n_state_elems = self.ransomgame_config.game_config.stages.shape[1]
         # TODO fix this as state expands
         # n_state_elems += len(self.state.stage_time_spent)
-        # n_state_elems += len(self.state.percent_exfiltrated)
+        n_state_elems += self.state.percent_exfiltrated.shape[1]
+        n_state_elems += self.state.percent_encrypted.shape[1]
         """
         n_state_elems += 1  # percent_exfiltrated
         n_state_elems += 1  # percent_encrypted
@@ -454,11 +456,14 @@ class RansomGameEnv(gym.Env, ABC):
         state_key = (
             # int(observation["time"]),
             tuple(int(x) for x in observation["stages"]),
+            tuple(int(x) for x in observation["percent_exfiltrated"]),
+            tuple(int(x) for x in observation["percent_encrypted"]),
         )
         # TODO fix this later when expanding state
-        state_key = state_key[0]
+        # state_key = state_key[0]
+        key = tuple(x for inner in state_key for x in inner)
 
-        if state_key not in self.state_to_idx:
+        if key not in self.state_to_idx:
             next_state_id = len(self.state_to_idx)
 
             # if next_state_id >= self.Q_attacker.shape[0]:
@@ -467,9 +472,9 @@ class RansomGameEnv(gym.Env, ABC):
             #         "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
             #     )
 
-            self.state_to_idx[state_key] = next_state_id
+            self.state_to_idx[key] = next_state_id
 
-        return self.state_to_idx[state_key]
+        return self.state_to_idx[key]
 
 
 class AttackerEnv(RansomGameEnv, ABC):
