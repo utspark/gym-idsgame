@@ -21,9 +21,11 @@ class GameConfig:
         initial_state: Optional[GameState] = None,
         ransomware: bool = False,
         manual_attacker: bool = False,
+        manual_defender: bool = False,
+        attacker: bool = True,
+        defender: bool = False,
         num_attack_types: int = 10,
         max_value: int = 1,
-        manual_defender: bool = False,
         initial_state_path: Optional[str] = None,
         dense_rewards: bool = False,
     ):
@@ -50,6 +52,8 @@ class GameConfig:
         # self.num_cols = 10
         self.manual_attacker = manual_attacker
         self.manual_defender = manual_defender
+        self.attacker = attacker
+        self.defender = defender
         self.num_attack_types = num_attack_types
         self.max_value = max_value
         self.num_attack_actions = 5

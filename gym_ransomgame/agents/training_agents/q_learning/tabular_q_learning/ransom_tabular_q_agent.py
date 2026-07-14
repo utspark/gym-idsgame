@@ -21,11 +21,15 @@ class RansomTabularQAgent(QAgent):
     def __init__(self, env: RansomGameEnv, config: QAgentConfig):
         super().__init__(env, config)
 
-        # self.env: RansomGameEnv = env
+        self.env: RansomGameEnv = env
         self.state_to_idx = self.env.build_state_to_idx_map()
 
-        self.Q_attacker = np.zeros((self.env.num_states_full, self.env.num_attack_actions))
-        self.Q_defender = np.zeros((1, self.env.num_defense_actions))
+        self.Q_attacker = np.zeros(
+            (self.env.num_states_full, self.env.num_attack_actions)
+        )
+        self.Q_defender = np.zeros(
+            (self.env.num_states_full, self.env.num_defense_actions)
+        )
 
         self.env.ransomgame_config.save_trajectories = False
         self.env.ransomgame_config.save_attack_stats = True
@@ -59,14 +63,16 @@ class RansomTabularQAgent(QAgent):
         if attacker:
             actions = list(range(self.env.num_attack_actions))
             legal_actions = [
-                action for action in actions
+                action
+                for action in actions
                 if self.env.attacker_action_space.contains(action)
             ]
             q_table = self.Q_attacker
         else:
             actions = list(range(self.env.num_defense_actions))
             legal_actions = [
-                action for action in actions
+                action
+                for action in actions
                 if self.env.defender_action_space.contains(action)
             ]
             q_table = self.Q_defender
@@ -74,8 +80,7 @@ class RansomTabularQAgent(QAgent):
         if not legal_actions:
             raise AssertionError("No legal actions available")
 
-        # TODO change random sampling here
-        if (np.random.rand() < self.config.epsilon and not eval) or (
+        if (np.random.random() < self.config.epsilon and not eval) or (
             eval and np.random.random() < self.config.eval_epsilon
         ):
             return int(np.random.choice(legal_actions))
@@ -98,9 +103,11 @@ class RansomTabularQAgent(QAgent):
         episode_steps = []
 
         # Logging
-        self.outer_train.set_description_str("[Train] epsilon: {:.2f}, avg_a_R: {:.2f}, avg_d_R: {:.2f}, "
-                                             "avg_t: {:.2f}, avg_h: {:.2f}, acc_A_R: {:.2f}, "
-                                             "acc_D_R: {:.2f}".format(self.config.epsilon, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        self.outer_train.set_description_str(
+            "[Train] epsilon: {:.2f}, avg_a_R: {:.2f}, avg_d_R: {:.2f}, "
+            "avg_t: {:.2f}, avg_h: {:.2f}, acc_A_R: {:.2f}, "
+            "acc_D_R: {:.2f}".format(self.config.epsilon, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        )
 
         # Training
         for episode in range(self.config.num_episodes):
@@ -112,7 +119,9 @@ class RansomTabularQAgent(QAgent):
                     self.env.render(mode="human")
 
                 if not self.config.attacker and not self.config.defender:
-                    raise AssertionError("Must specify whether training an attacker agent or defender agent")
+                    raise AssertionError(
+                        "Must specify whether training an attacker agent or defender agent"
+                    )
 
                 # Default initialization
                 s_idx_a = 0
@@ -122,30 +131,16 @@ class RansomTabularQAgent(QAgent):
 
                 # Get attacker and defender actions
                 if self.config.attacker:
-                    s_idx_a = self.env.get_state_id(attacker_obs)
-                    if self.config.tab_full_state_space:
-                        if self.env.fully_observed():
-                            attacker_obs = np.append(attacker_obs, defender_obs)
-                        t = tuple(attacker_obs.astype(int).flatten().tolist())
-                        t = tuple(map(lambda x: min(x, self.max_value), t))
-                        s_idx_a = self.state_to_idx[t]
-                    attacker_action = self.get_action(s_idx_a, attacker=True)
+                    s_idx_a, attacker_action = self._get_action(attacker_obs, defender_obs, attacker=True)
 
-                # if self.config.defender:
-                #     s_idx_d = defender_state_node_id
-                #     if self.config.tab_full_state_space:
-                #         if self.env.fully_observed():
-                #             defender_obs = np.append(attacker_obs, defender_obs)
-                #         t = tuple(defender_obs.astype(int).flatten().tolist())
-                #         t = tuple(map(lambda x: min(x, self.max_value), t))
-                #         s_idx_d = self.state_to_idx[t]
-                #     defender_action = self.get_action(s_idx_d, attacker=False)
+                if self.config.defender:
+                    s_idx_d, defender_action = self._get_action(defender_obs, attacker_obs, attacker=False)
 
                 action = (attacker_action, defender_action)
 
                 # Take a step in the environment
                 obs_prime, reward, done, _, info = self.env.step(action)
-                reward, obs_prime, done = self.step_and_update(action, s_idx_a, s_idx_d, reward, obs_prime, done)
+                self.step_and_update(action, s_idx_a, s_idx_d, reward, obs_prime)
 
                 # Update state information and metrics
                 attacker_reward, defender_reward = reward
@@ -173,13 +168,25 @@ class RansomTabularQAgent(QAgent):
             # Log average metrics every <self.config.train_log_frequency> episodes
             if episode % self.config.train_log_frequency == 0:
                 if self.num_train_games > 0 and self.num_train_games_total > 0:
-                    self.train_hack_probability = self.num_train_hacks / self.num_train_games
-                    self.train_cumulative_hack_probability = self.num_train_hacks_total / self.num_train_games_total
+                    self.train_hack_probability = (
+                        self.num_train_hacks / self.num_train_games
+                    )
+                    self.train_cumulative_hack_probability = (
+                        self.num_train_hacks_total / self.num_train_games_total
+                    )
                 else:
                     self.train_hack_probability = 0.0
                     self.train_cumulative_hack_probability = 0.0
-                self.log_metrics(episode, self.train_result, episode_attacker_rewards, episode_defender_rewards,
-                                 episode_steps, None, None, lr=self.config.alpha)
+                self.log_metrics(
+                    episode,
+                    self.train_result,
+                    episode_attacker_rewards,
+                    episode_defender_rewards,
+                    episode_steps,
+                    None,
+                    None,
+                    lr=self.config.alpha,
+                )
                 episode_attacker_rewards = []
                 episode_defender_rewards = []
                 episode_steps = []
@@ -189,20 +196,30 @@ class RansomTabularQAgent(QAgent):
             # Run evaluation every <self.config.eval_frequency> episodes
             if episode % self.config.eval_frequency == 0:
                 print("\n\n" + "-" * 50 + "\n\n")
-                time.sleep(1.0)
+                time.sleep(0.5)
                 self.eval(episode)
                 print("\n\n" + "-" * 50 + "\n\n")
-                time.sleep(1.0)
+                time.sleep(0.5)
 
             # Save Q table every <self.config.checkpoint_frequency> episodes
             if episode % self.config.checkpoint_freq == 0:
                 self.save_q_table()
-                self.env.save_trajectories(checkpoint = True)
-                self.env.save_attack_data(checkpoint = True)
+                self.env.save_trajectories(checkpoint=True)
+                self.env.save_attack_data(checkpoint=True)
                 if self.config.save_dir is not None:
                     time_str = str(time.time())
-                    self.train_result.to_csv(self.config.save_dir + "/" + time_str + "_train_results_checkpoint.csv")
-                    self.eval_result.to_csv(self.config.save_dir + "/" + time_str + "_eval_results_checkpoint.csv")
+                    self.train_result.to_csv(
+                        self.config.save_dir
+                        + "/"
+                        + time_str
+                        + "_train_results_checkpoint.csv"
+                    )
+                    self.eval_result.to_csv(
+                        self.config.save_dir
+                        + "/"
+                        + time_str
+                        + "_eval_results_checkpoint.csv"
+                    )
 
             # Reset environment for the next episode and update game stats
             done = False
@@ -217,10 +234,10 @@ class RansomTabularQAgent(QAgent):
 
         # Final evaluation (for saving Gifs etc)
         print("\n\n" + "-" * 50 + "\n\n")
-        time.sleep(1.0)
+        time.sleep(0.5)
         self.eval(self.config.num_episodes, log=False)
         print("\n\n" + "-" * 50 + "\n\n")
-        time.sleep(1.0)
+        time.sleep(0.5)
 
         # Log and return
         self.log_state_values()
@@ -229,56 +246,76 @@ class RansomTabularQAgent(QAgent):
         self.save_q_table()
 
         # Save other game data
-        self.env.save_trajectories(checkpoint = False)
-        self.env.save_attack_data(checkpoint = False)
+        self.env.save_trajectories(checkpoint=False)
+        self.env.save_attack_data(checkpoint=False)
         if self.config.save_dir is not None:
             time_str = str(time.time())
-            self.train_result.to_csv(self.config.save_dir + "/" + time_str + "_train_results_checkpoint.csv")
-            self.eval_result.to_csv(self.config.save_dir + "/" + time_str + "_eval_results_checkpoint.csv")
+            self.train_result.to_csv(
+                self.config.save_dir + "/" + time_str + "_train_results_checkpoint.csv"
+            )
+            self.eval_result.to_csv(
+                self.config.save_dir + "/" + time_str + "_eval_results_checkpoint.csv"
+            )
 
         return self.train_result
 
-    def step_and_update(self, action, s_idx_a, s_idx_d, reward, obs_prime, done) -> Union[float, np.ndarray, bool]:
+    def _resolve_state_idx(self, obs, other_obs) -> int:
+        if self.config.tab_full_state_space:
+            if self.env.fully_observed():
+                obs = np.append(obs, other_obs)
+            t = tuple(obs.astype(int).flatten().tolist())
+            t = tuple(min(x, self.max_value) for x in t)
+            return self.state_to_idx[t]
+        return self.env.get_state_id(obs)
+
+    def _get_action(self, obs, other_obs, attacker: bool, eval: bool = False) -> tuple[int, int]:
+        s_idx = self._resolve_state_idx(obs, other_obs)
+        action = self.get_action(s_idx, attacker=attacker, eval=eval)
+        return s_idx, action
+
+    def step_and_update(self, action, s_idx_a, s_idx_d, reward, obs_prime) -> None:
         attacker_reward, defender_reward = reward
         attacker_obs_prime, defender_obs_prime = obs_prime
         attacker_action, defender_action = action
 
         if self.config.attacker:
-            s_prime_idx = 0
-            if self.config.tab_full_state_space:
-                if self.env.fully_observed():
-                    attacker_obs_prime = np.append(attacker_obs_prime, defender_obs_prime)
-                t = tuple(attacker_obs_prime.astype(int).flatten().tolist())
-                t = tuple(map(lambda x: min(x, self.max_value), t))
-                s_prime_idx = self.state_to_idx[t]
-            self.q_learning_update(s_idx_a, attacker_action, attacker_reward, s_prime_idx, attacker=True)
+            s_prime_idx = self._resolve_state_idx(
+                attacker_obs_prime, defender_obs_prime
+            )
+            self.q_learning_update(
+                s_idx_a, attacker_action, attacker_reward, s_prime_idx, attacker=True
+            )
 
-        # if self.config.defender:
-        #     s_prime_idx = 0
-        #     if self.config.tab_full_state_space:
-        #         if self.env.fully_observed():
-        #             defender_obs_prime = np.append(attacker_obs_prime, defender_obs_prime)
-        #         t = tuple(defender_obs_prime.astype(int).flatten().tolist())
-        #         t = tuple(map(lambda x: min(x, self.max_value), t))
-        #         s_prime_idx = self.state_to_idx[t]
-        #     self.q_learning_update(s_idx_d, defender_action, defender_reward, s_prime_idx,
-        #                            attacker=False)
+        if self.config.defender:
+            s_prime_idx = self._resolve_state_idx(
+                defender_obs_prime, attacker_obs_prime
+            )
+            self.q_learning_update(
+                s_idx_d, defender_action, defender_reward, s_prime_idx, attacker=False
+            )
 
-        return reward, (attacker_obs_prime, defender_obs_prime), done
+        return
 
-
-    def q_learning_update(self, s: int, a: int, r: float, s_prime: int, attacker: bool = True) -> None:
+    def q_learning_update(
+        self, s: int, a: int, r: float, s_prime: int, attacker: bool = True
+    ) -> None:
         """
         Performs a Q-learning update.
         """
         if attacker:
             self.Q_attacker[s][a] = self.Q_attacker[s][a] + self.config.alpha * (
-                r + self.config.gamma * np.max(self.Q_attacker[s_prime]) - self.Q_attacker[s][a]
+                r
+                + self.config.gamma * np.max(self.Q_attacker[s_prime])
+                - self.Q_attacker[s][a]
             )
         else:
             self.Q_defender[s][a] = self.Q_defender[s][a] + self.config.alpha * (
-                r + self.config.gamma * np.max(self.Q_defender[s_prime]) - self.Q_defender[s][a]
+                r
+                + self.config.gamma * np.max(self.Q_defender[s_prime])
+                - self.Q_defender[s][a]
             )
+
+        return
 
     def eval(self, train_episode, log=True) -> ExperimentResult:
         """
@@ -314,7 +351,9 @@ class RansomTabularQAgent(QAgent):
         episode_steps = []
 
         # Logging
-        self.outer_eval = tqdm.tqdm(total=self.config.eval_episodes, desc='', position=1)
+        self.outer_eval = tqdm.tqdm(
+            total=self.config.eval_episodes, desc="", position=1
+        )
         # self.outer_eval.set_description_str(
         #     "[Eval] avg_a_R: {:.2f}, avg_d_R: {:.2f}, avg_t: {:.2f}, avg_h: {:.2f}, acc_A_R: {:.2f}, "
         #     "acc_D_R: {:.2f}".format(0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
@@ -362,24 +401,10 @@ class RansomTabularQAgent(QAgent):
 
                 # Get attacker and defender actions
                 if self.config.attacker:
-                    s_idx_a = self.env.get_state_id(attacker_obs)
-                    if self.config.tab_full_state_space:
-                        if self.env.fully_observed():
-                            attacker_obs = np.append(attacker_obs, defender_obs)
-                        t = tuple(attacker_obs.astype(int).flatten().tolist())
-                        t = tuple(map(lambda x: min(x, self.max_value), t))
-                        s_idx_a = self.state_to_idx[t]
-                    attacker_action = self.get_action(s_idx_a, attacker=True, eval=True)
+                    s_idx_a, attacker_action = self._get_action(attacker_obs, defender_obs, attacker=True, eval=True)
 
-                # if self.config.defender:
-                #     s_idx_d = defender_state_node_id
-                #     if self.config.tab_full_state_space:
-                #         if self.env.fully_observed():
-                #             defender_obs = np.append(attacker_obs, defender_obs)
-                #         t = tuple(defender_obs.astype(int).flatten().tolist())
-                #         t = tuple(map(lambda x: min(x, self.max_value), t))
-                #         s_idx_d = self.state_to_idx[t]
-                #     defender_action = self.get_action(s_idx_d, attacker=False, eval=True)
+                if self.config.defender:
+                    s_idx_d, defender_action = self._get_action(defender_obs, attacker_obs, attacker=False, eval=True)
 
                 action = (attacker_action, defender_action)
 
@@ -413,7 +438,11 @@ class RansomTabularQAgent(QAgent):
             # if self.config.eval_render:
             #     self.env.render()
             #     time.sleep(self.config.eval_sleep)
-            self.config.logger.info("Eval episode: {:>5}, Game ended after {} steps".format(episode, episode_step))
+            self.config.logger.info(
+                "Eval episode: {:>5}, Game ended after {} steps".format(
+                    episode, episode_step
+                )
+            )
 
             # Record episode metrics
             episode_attacker_rewards.append(episode_attacker_reward)
@@ -421,7 +450,7 @@ class RansomTabularQAgent(QAgent):
             episode_steps.append(episode_step)
 
             # Update eval stats
-            self.num_eval_games +=1
+            self.num_eval_games += 1
             self.num_eval_games_total += 1
             self.eval_attacker_cumulative_reward += episode_attacker_reward
             self.eval_defender_cumulative_reward += episode_defender_reward
@@ -432,12 +461,22 @@ class RansomTabularQAgent(QAgent):
             # Log average metrics every <self.config.eval_log_frequency> episodes
             if episode % self.config.eval_log_frequency == 0 and log:
                 if self.num_eval_games > 0:
-                    self.eval_hack_probability = float(self.num_eval_hacks) / float(self.num_eval_games)
+                    self.eval_hack_probability = float(self.num_eval_hacks) / float(
+                        self.num_eval_games
+                    )
                 if self.num_eval_games_total > 0:
-                    self.eval_cumulative_hack_probability = float(self.num_eval_hacks_total) / float(
-                        self.num_eval_games_total)
-                self.log_metrics(episode, self.eval_result, episode_attacker_rewards, episode_defender_rewards,
-                                 episode_steps, update_stats=False, eval = True)
+                    self.eval_cumulative_hack_probability = float(
+                        self.num_eval_hacks_total
+                    ) / float(self.num_eval_games_total)
+                self.log_metrics(
+                    episode,
+                    self.eval_result,
+                    episode_attacker_rewards,
+                    episode_defender_rewards,
+                    episode_steps,
+                    update_stats=False,
+                    eval=True,
+                )
 
             # Save gifs
             # if self.config.gifs and self.config.video:
@@ -446,21 +485,27 @@ class RansomTabularQAgent(QAgent):
 
             if len(attacker_frames) > 1:
                 # Save state values analysis for final state
-                base_path = self.config.save_dir + "/state_values/" + str(train_episode) + "/"
+                base_path = (
+                    self.config.save_dir + "/state_values/" + str(train_episode) + "/"
+                )
                 if not os.path.exists(base_path):
                     os.makedirs(base_path)
                 np.save(base_path + "attacker_states.npy", attacker_states)
                 np.save(base_path + "attacker_state_values.npy", attacker_state_values)
                 np.save(base_path + "attacker_frames.npy", attacker_frames)
 
-
             if len(defender_frames) > 1:
                 # Save state values analysis for final state
-                base_path = self.config.save_dir + "/state_values/" + str(train_episode) + "/"
+                base_path = (
+                    self.config.save_dir + "/state_values/" + str(train_episode) + "/"
+                )
                 if not os.path.exists(base_path):
                     os.makedirs(base_path)
                 np.save(base_path + "defender_states.npy", np.array(defender_states))
-                np.save(base_path + "defender_state_values.npy", np.array(defender_state_values))
+                np.save(
+                    base_path + "defender_state_values.npy",
+                    np.array(defender_state_values),
+                )
                 np.save(base_path + "defender_frames.npy", np.array(defender_frames))
 
             # Reset for new eval episode
@@ -477,11 +522,22 @@ class RansomTabularQAgent(QAgent):
         # Log average eval statistics
         if log:
             if self.num_eval_games > 0:
-                self.eval_hack_probability = float(self.num_eval_hacks) / float(self.num_eval_games)
+                self.eval_hack_probability = float(self.num_eval_hacks) / float(
+                    self.num_eval_games
+                )
             if self.num_eval_games_total > 0:
-                self.eval_cumulative_hack_probability = float(self.num_eval_hacks_total) / float(self.num_eval_games_total)
-            self.log_metrics(train_episode, self.eval_result, episode_attacker_rewards, episode_defender_rewards,
-                             episode_steps, update_stats=True, eval=True)
+                self.eval_cumulative_hack_probability = float(
+                    self.num_eval_hacks_total
+                ) / float(self.num_eval_games_total)
+            self.log_metrics(
+                train_episode,
+                self.eval_result,
+                episode_attacker_rewards,
+                episode_defender_rewards,
+                episode_steps,
+                update_stats=True,
+                eval=True,
+            )
 
         self.outer_eval.close()
         self.env.close()
@@ -527,4 +583,6 @@ class RansomTabularQAgent(QAgent):
                 self.config.logger.info("Saving Q-table to: {}".format(path))
                 np.save(path, self.Q_defender)
         else:
-            self.config.logger.warning("Save path not defined, not saving Q table to disk")
+            self.config.logger.warning(
+                "Save path not defined, not saving Q table to disk"
+            )

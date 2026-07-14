@@ -1,6 +1,7 @@
 """
 Stateful data of the gym-ransomgame environment
 """
+
 from typing import List, Optional, Tuple, Dict
 from types import MappingProxyType
 import numpy as np
@@ -29,19 +30,23 @@ class GameState:
     EXFILTRATION_REWARD = 1.5
     ENCRYPTION_REWARD = 2.5
 
-    ATTACK_CONFIGS = MappingProxyType({
-        RECONNAISSANCE: (0.1, 0.1),
-        COMPRESSION: (0.1, 0.1),
-        EXFILTRATION: (0.1, 0.1),
-        ENCRYPTION: (0.1, 0.1)
-    })
+    ATTACK_CONFIGS = MappingProxyType(
+        {
+            RECONNAISSANCE: (0.1, 0.1),
+            COMPRESSION: (0.1, 0.1),
+            EXFILTRATION: (0.1, 0.1),
+            ENCRYPTION: (0.1, 0.1),
+        }
+    )
 
-    CONSECUTIVE_ATTEMPT_REQUIREMENTS = MappingProxyType({
-        RECONNAISSANCE: 2,
-        COMPRESSION: 4,
-        EXFILTRATION: 5,
-        ENCRYPTION: 8,
-    })
+    CONSECUTIVE_ATTEMPT_REQUIREMENTS = MappingProxyType(
+        {
+            RECONNAISSANCE: 2,
+            COMPRESSION: 4,
+            EXFILTRATION: 5,
+            ENCRYPTION: 8,
+        }
+    )
 
     def __init__(
         self,
@@ -82,31 +87,43 @@ class GameState:
         self.attack_successful = False
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated = np.zeros((1, 4), dtype=bool)  # exfiltration completion bar
+        self.percent_exfiltrated = np.zeros(
+            (1, 4), dtype=bool
+        )  # exfiltration completion bar
         # self.percent_exfiltrated: float = 0.0
         self.percent_encrypted = np.zeros((1, 4), dtype=bool)
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
         self.global_detector_score: float = 0.0
 
-        self.attack_values: np.ndarray = attack_values if attack_values is not None else np.zeros((1, 1))
-        self.defense_values: np.ndarray = defense_values if defense_values is not None else np.zeros((1, 1))
+        self.attack_values: np.ndarray = (
+            attack_values if attack_values is not None else np.zeros((1, 1))
+        )
+        self.defense_values: np.ndarray = (
+            defense_values if defense_values is not None else np.zeros((1, 1))
+        )
         self.defense_det: Optional[np.ndarray] = defense_det
         self.attacker_pos: Tuple[int, int] = attacker_pos
         self.game_step: int = game_step
         self.attacker_cumulative_reward: float = attacker_cumulative_reward
         self.defender_cumulative_reward: float = defender_cumulative_reward
         self.num_games: int = num_games
-        self.attack_events: List[int] = attack_events if attack_events is not None else []
+        self.attack_events: List[int] = (
+            attack_events if attack_events is not None else []
+        )
         self.attack_history: List[int] = list(self.attack_events)
-        self.defense_events: List[AttackDefenseEvent] = defense_events if defense_events is not None else []
+        self.defense_events: List[AttackDefenseEvent] = (
+            defense_events if defense_events is not None else []
+        )
         self.defense_history: List[AttackDefenseEvent] = list(self.defense_events)
         self.done = done
         self.detected = detected
         self.attack_defense_type = attack_type
         self.num_hacks = num_hacks
         self.hacked = hacked
-        self.np_random: np.random.Generator = np_random if np_random is not None else np.random.default_rng()
+        self.np_random: np.random.Generator = (
+            np_random if np_random is not None else np.random.default_rng()
+        )
         self.action_descriptors = ["RE", "F1", "F2", "EX"]
 
     def default_state(
@@ -147,13 +164,12 @@ class GameState:
         self.hacked = False
         self.attack_successful = False
 
-
     def set_state(
         self,
         stages: Optional[np.ndarray] = None,
-        percent_exfiltrated = None,
-        percent_encrypted = None,
-        percent_benign_completed = None,
+        percent_exfiltrated=None,
+        percent_encrypted=None,
+        percent_benign_completed=None,
         local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0.0,
     ):
@@ -169,12 +185,27 @@ class GameState:
         :return: None
         """
         self.stages = stages if stages is not None else np.zeros((1, 4))
-        self.percent_exfiltrated = percent_exfiltrated if percent_exfiltrated is not None else np.zeros((1, 4), dtype=np.bool)
-        self.percent_encrypted = percent_encrypted if percent_encrypted is not None else np.zeros((1, 4), dtype=np.bool)
-        self.percent_benign_completed = percent_benign_completed if percent_benign_completed is not None else np.zeros((1, 4), dtype=np.bool)
-        self.local_detector_scores = local_detector_scores if local_detector_scores is not None else np.zeros((1, 4))
+        self.percent_exfiltrated = (
+            percent_exfiltrated
+            if percent_exfiltrated is not None
+            else np.zeros((1, 4), dtype=np.bool)
+        )
+        self.percent_encrypted = (
+            percent_encrypted
+            if percent_encrypted is not None
+            else np.zeros((1, 4), dtype=np.bool)
+        )
+        self.percent_benign_completed = (
+            percent_benign_completed
+            if percent_benign_completed is not None
+            else np.zeros((1, 4), dtype=np.bool)
+        )
+        self.local_detector_scores = (
+            local_detector_scores
+            if local_detector_scores is not None
+            else np.zeros((1, 4))
+        )
         self.global_detector_score = global_detector_score
-
 
     def new_game(
         self,
@@ -221,7 +252,7 @@ class GameState:
         self.global_detector_score = 0.0
         if np_random is not None:
             self.np_random = np_random
-        
+
         if not randomize_state:
             self.attack_values = np.copy(init_state.attack_values)
             self.defense_values = np.copy(init_state.defense_values)
@@ -238,14 +269,24 @@ class GameState:
         :return: a copy of the current state
         """
         new_state = GameState()
-        for attr in ['attack_values', 'defense_values', 'defense_det']:
+        for attr in ["attack_values", "defense_values", "defense_det"]:
             setattr(new_state, attr, np.copy(getattr(self, attr)))
-        
-        for attr in ['game_step', 'attacker_cumulative_reward', 'defender_cumulative_reward',
-                    'num_games', 'done', 'detected', 'attack_defense_type', 'num_hacks', 'hacked', 'np_random',
-                    'attack_successful']:
+
+        for attr in [
+            "game_step",
+            "attacker_cumulative_reward",
+            "defender_cumulative_reward",
+            "num_games",
+            "done",
+            "detected",
+            "attack_defense_type",
+            "num_hacks",
+            "hacked",
+            "np_random",
+            "attack_successful",
+        ]:
             setattr(new_state, attr, getattr(self, attr))
-            
+
         new_state.attack_events = list(self.attack_events)
         new_state.attack_history = list(self.attack_history)
         new_state.defense_events = list(self.defense_events)
@@ -264,7 +305,9 @@ class GameState:
         return True
 
     @staticmethod
-    def _calculate_exponential_probability(p_base: float, p_progress: float, n: int) -> float:
+    def _calculate_exponential_probability(
+        p_base: float, p_progress: float, n: int
+    ) -> float:
         """
         Calculates the probability using an exponential saturation model.
         p(n) = 1 - (1 - p_base) * (1 - p_progress)^(n-1)
@@ -281,7 +324,11 @@ class GameState:
     def get_consecutive_attack_attempts(self, attack_type: int) -> int:
         history_len = 10
         consecutive_attempts = 0
-        attack_history = self.attack_history[history_len:] if len(self.attack_history) > history_len else self.attack_history
+        attack_history = (
+            self.attack_history[history_len:]
+            if len(self.attack_history) > history_len
+            else self.attack_history
+        )
 
         for k, g in groupby(reversed(attack_history)):
             if k == attack_type:
@@ -295,9 +342,13 @@ class GameState:
 
     def get_attack_probability(self, attack_type: int) -> float:
         p_base, p_progress = self.ATTACK_CONFIGS.get(attack_type, (0.1, 0.1))
-        return self._calculate_exponential_probability(p_base, p_progress, self.get_consecutive_attack_attempts(attack_type))
+        return self._calculate_exponential_probability(
+            p_base, p_progress, self.get_consecutive_attack_attempts(attack_type)
+        )
 
-    def simulate_stage(self, attack_type: int, exponential: bool = True) -> Tuple[float, float]:
+    def simulate_stage(
+        self, attack_type: int, exponential: bool = True
+    ) -> Tuple[float, float]:
         """
         Generic helper to simulate any attack type.
         """
@@ -307,7 +358,9 @@ class GameState:
         assert self.np_random is not None
 
         if attack_type < self.stage_time_spent.shape[1]:
-            self.stage_time_spent[0, attack_type] = self.get_consecutive_attack_attempts(attack_type)
+            self.stage_time_spent[0, attack_type] = (
+                self.get_consecutive_attack_attempts(attack_type)
+            )
 
         # no reward for benign
         if attack_type >= self.stages.shape[1]:
@@ -321,29 +374,39 @@ class GameState:
 
         if exponential:
             p = self.get_attack_probability(attack_type)
-            if attack_type == self.EXFILTRATION and self.stages[0, self.COMPRESSION] == 1:
+            if (
+                attack_type == self.EXFILTRATION
+                and self.stages[0, self.COMPRESSION] == 1
+            ):
                 p = np.clip(p * 2, 0, 1)
-            
+
             # Update progress percentages
             if attack_type == self.EXFILTRATION:
-                for i, trip in enumerate(np.linspace(0.01, 0.501, num=self.percent_exfiltrated.shape[1])):
+                for i, trip in enumerate(
+                    np.linspace(0.01, 0.501, num=self.percent_exfiltrated.shape[1])
+                ):
                     if p > trip:
                         self.percent_exfiltrated[0, i] = 1
 
             elif attack_type == self.ENCRYPTION:
-                for i, trip in enumerate(np.linspace(0.01, 0.501, num=self.percent_encrypted.shape[1])):
+                for i, trip in enumerate(
+                    np.linspace(0.01, 0.501, num=self.percent_encrypted.shape[1])
+                ):
                     if p >= trip:
                         self.percent_encrypted[0, i] = 1
-            
+
             stage_success = self.np_random.binomial(1, p) == 1
 
         else:
             requirement = self._get_consecutive_attack_requirement(attack_type)
             consecutive = self.get_consecutive_attack_attempts(attack_type)
 
-            if attack_type == self.EXFILTRATION and self.stages[0, self.COMPRESSION] == 1:
+            if (
+                attack_type == self.EXFILTRATION
+                and self.stages[0, self.COMPRESSION] == 1
+            ):
                 consecutive = np.clip(consecutive * 2, 0, requirement)
-            
+
             # Update progress percentages
             progress = consecutive / requirement
             if attack_type == self.EXFILTRATION:
@@ -355,7 +418,7 @@ class GameState:
                 for trip in np.linspace(0, 1, num=self.percent_encrypted.shape[1]):
                     if progress > trip:
                         self.percent_encrypted[0, trip] = 1
-            
+
             stage_success = consecutive >= requirement
 
         if stage_success:
@@ -364,11 +427,15 @@ class GameState:
 
             if attack_type == self.EXFILTRATION:
                 reward += self.EXFILTRATION_REWARD
-                self.percent_exfiltrated = np.ones(self.percent_exfiltrated.shape, dtype=bool)
+                self.percent_exfiltrated = np.ones(
+                    self.percent_exfiltrated.shape, dtype=bool
+                )
 
             if attack_type == self.ENCRYPTION:
                 reward += self.ENCRYPTION_REWARD
-                self.percent_encrypted = np.ones(self.percent_encrypted.shape, dtype=bool)
+                self.percent_encrypted = np.ones(
+                    self.percent_encrypted.shape, dtype=bool
+                )
                 self.attack_successful = True
                 self.hacked = True
                 self.done = True
@@ -419,7 +486,9 @@ class GameState:
         }
         return attacker_observation
 
-    def get_attacker_node_from_observation(self, observation: np.ndarray, reconnaissance : bool = False) -> int:
+    def get_attacker_node_from_observation(
+        self, observation: np.ndarray, reconnaissance: bool = False
+    ) -> int:
         """
         Extracts which node the attacker is currently at from the observation representation
 
@@ -455,7 +524,7 @@ class GameState:
         :param defense_type: the type of the defense
         :return: None
         """
-        defense_event = AttackDefenseEvent(target_pos, defense_type) # type: ignore
+        defense_event = AttackDefenseEvent(target_pos, defense_type)  # type: ignore
         self.attack_defense_type = defense_type
         self.defense_events.append(defense_event)
         self.defense_history.append(defense_event)
@@ -468,8 +537,11 @@ class GameState:
         :return: An observation of the environment
         """
         defender_observation = {
-            "local_detector_scores": self.local_detector_scores.astype(np.float32),
-            "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
+            # "stages": self.stages.flatten().astype(int),
+            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
+            "percent_exfiltrated": self.percent_exfiltrated.flatten().astype(int),
+            # "local_detector_scores": self.local_detector_scores.astype(np.float32),
+            # "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
         }
 
         return defender_observation
@@ -486,11 +558,10 @@ class GameState:
 
     @staticmethod
     def load(path):
-        filehandler = open(path, 'rb')
+        filehandler = open(path, "rb")
         return pickle.load(filehandler)
 
     @staticmethod
     def save(path, state):
-        filehandler = open(path + "/initial_state.pkl", 'wb')
+        filehandler = open(path + "/initial_state.pkl", "wb")
         pickle.dump(state, filehandler)
-

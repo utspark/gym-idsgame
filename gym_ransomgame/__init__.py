@@ -12,7 +12,13 @@ from gymnasium.envs.registration import register
 # [Reconnaissance activities] disabled
 # [Reconnaissance bool features] No
 register(
-    id='ransomgame-minimal_defense-v0',
-    entry_point='gym_ransomgame.envs:RansomGameMinimalDefenseV0Env',
-    kwargs={'ransomgame_config': None, 'save_dir': None, 'initial_state_path': None}
+    id="ransomgame-minimal_defense-v0",
+    entry_point="gym_ransomgame.envs:RansomGameMinimalDefenseV0Env",
+    kwargs={"ransomgame_config": None, "save_dir": None, "initial_state_path": None},
+)
+
+register(
+    id="ransomgame-minimal_attack-v0",
+    entry_point="gym_ransomgame.envs:RansomGameMinimalAttackV0Env",
+    kwargs={"ransomgame_config": None, "save_dir": None, "initial_state_path": None},
 )
