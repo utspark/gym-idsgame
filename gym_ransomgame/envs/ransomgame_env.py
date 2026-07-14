@@ -21,6 +21,7 @@ from gym_ransomgame.envs.rendering.viewer import Viewer
 
 from gym_idsgame.agents.bot_agents.bot_agent import BotAgent
 
+
 class DummyAgent(BotAgent):
 
     def __init__(self, game_config):
@@ -29,10 +30,13 @@ class DummyAgent(BotAgent):
     def action(self, state):
         return 0
 
+
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_ransomgame.envs.dao.game_state import GameState
 from gym_ransomgame.envs.dao.ransomgame_config import RansomGameConfig
-from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import DefendMinimalValueBotAgent
+from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import (
+    DefendMinimalValueBotAgent,
+)
 import gym_ransomgame.envs.util.ransomgame_util as util
 
 
@@ -45,7 +49,12 @@ class RansomGameEnv(gym.Env, ABC):
     victim system while a defender agent attempts to defend the system.
     """
 
-    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str, initial_state_path: str):
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
         """
         Initializes the environment
 
@@ -93,27 +102,44 @@ class RansomGameEnv(gym.Env, ABC):
         self.state = self.ransomgame_config.game_config.initial_state.copy()
         self.state = self.ransomgame_config.game_config.initial_state
         self.state_to_idx = self.build_state_to_idx_map()
-        self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
-        self.action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
-        self.attacker_action_space = self.ransomgame_config.game_config.get_action_space(defender=False)
-        self.defender_action_space = self.ransomgame_config.game_config.get_action_space(defender=True)
+        self.observation_space = (
+            self.ransomgame_config.game_config.get_attacker_observation_space()
+        )
+        self.action_space = self.ransomgame_config.game_config.get_action_space(
+            defender=False
+        )
+        self.attacker_action_space = (
+            self.ransomgame_config.game_config.get_action_space(defender=False)
+        )
+        self.defender_action_space = (
+            self.ransomgame_config.game_config.get_action_space(defender=True)
+        )
         self.viewer = None
         self.steps_beyond_done = None
         self.metadata = {
-         'render_modes': ['human', 'rgb_array'],
-         'render.modes': ['human', 'rgb_array'],
-         'render_fps': 50,
-         'video.frames_per_second' : 50 # Video rendering speed
+            "render_modes": ["human", "rgb_array"],
+            "render.modes": ["human", "rgb_array"],
+            "render_fps": 50,
+            "video.frames_per_second": 50,  # Video rendering speed
         }
         self._gym_version = gym.__version__
-        self.reward_range = (float(constants.GAME_CONFIG.NEGATIVE_REWARD), float(constants.GAME_CONFIG.POSITIVE_REWARD))
+        self.reward_range = (
+            float(constants.GAME_CONFIG.NEGATIVE_REWARD),
+            float(constants.GAME_CONFIG.POSITIVE_REWARD),
+        )
 
         self.n_state_elems = 12
         self.num_states = self.n_state_elems
-        self.num_states_full = int(math.pow(self.ransomgame_config.game_config.max_value + 1, self.n_state_elems))
+        self.num_states_full = int(
+            math.pow(
+                self.ransomgame_config.game_config.max_value + 1, self.n_state_elems
+            )
+        )
 
         self.num_attack_actions = self.ransomgame_config.game_config.num_attack_actions
-        self.num_defense_actions = self.ransomgame_config.game_config.num_defense_actions
+        self.num_defense_actions = (
+            self.ransomgame_config.game_config.num_defense_actions
+        )
         self.past_moves = []
         self.past_positions = []
         self.hacked_nodes = []
@@ -130,7 +156,9 @@ class RansomGameEnv(gym.Env, ABC):
         self.failed_attacks = {}
 
     # -------- API ------------
-    def step(self, action: Any) -> tuple[tuple[dict, dict], tuple[float, float], bool, bool, dict]:
+    def step(
+        self, action: Any
+    ) -> tuple[tuple[dict, dict], tuple[float, float], bool, bool, dict]:
         """
         Takes a step in the environment using the given action.
 
@@ -152,7 +180,13 @@ class RansomGameEnv(gym.Env, ABC):
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
             obs = self.get_observation()
-            return obs, (float(100*constants.GAME_CONFIG.NEGATIVE_REWARD), 0), True, False, info
+            return (
+                obs,
+                (float(100 * constants.GAME_CONFIG.NEGATIVE_REWARD), 0),
+                True,
+                False,
+                info,
+            )
 
         attack_action, defense_action = action
 
@@ -162,7 +196,11 @@ class RansomGameEnv(gym.Env, ABC):
             trajectory.append([attack_action])
 
         # 2. Interpret defense action
-        defense_node_id, defense_pos, defense_type,  = self.get_defender_action(action)
+        (
+            defense_node_id,
+            defense_pos,
+            defense_type,
+        ) = self.get_defender_action(action)
         trajectory.append([defense_node_id, defense_pos, defense_type])
 
         # 3. Defend
@@ -178,14 +216,16 @@ class RansomGameEnv(gym.Env, ABC):
             # self.state.add_attack_event(target_pos, attack_type, self.state.attacker_pos, reconnaissance)
             # self.attacks.append((target_node_id, attack_type, self.state.game_step, reconnaissance))
 
-            reward = self.state.simulate_stage(attack_type=attack_action, exponential=True)
+            reward = self.state.simulate_stage(
+                attack_type=attack_action, exponential=True
+            )
 
             if self.ransomgame_config.save_attack_stats:
                 self.total_attacks.append([attack_action, self.state.attack_successful])
 
         else:
-            #print("illegal action:{}".format(attack_action))
-            reward = -1*constants.GAME_CONFIG.POSITIVE_REWARD, 0
+            # print("illegal action:{}".format(attack_action))
+            reward = -1 * constants.GAME_CONFIG.POSITIVE_REWARD, 0
             # self.state.done = True
             # self.state.detected = True
 
@@ -196,7 +236,9 @@ class RansomGameEnv(gym.Env, ABC):
             reward = self.get_detect_reward()
 
         if self.ransomgame_config.save_attack_stats:
-            self.attack_detections.append([detected, self.state.stages, self.state.stage_time_spent])
+            self.attack_detections.append(
+                [detected, self.state.stages, self.state.stage_time_spent]
+            )
 
         if self.state.done:
             if self.steps_beyond_done is None:
@@ -205,7 +247,8 @@ class RansomGameEnv(gym.Env, ABC):
                 gym.logger.warn(
                     "You are calling 'step()' even though this environment has already returned done = True. "
                     "You should always call 'reset()' once you receive 'done = True' -- "
-                    "any further steps are undefined behavior.")
+                    "any further steps are undefined behavior."
+                )
                 self.steps_beyond_done += 1
         self.state.game_step += 1
         # self.state.time += 1
@@ -223,7 +266,12 @@ class RansomGameEnv(gym.Env, ABC):
         # return obs, float(reward[0]), self.state.done, False, info
         return obs, reward, self.state.done, False, info
 
-    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None, update_stats: bool = False) -> tuple[dict, dict]:
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        options: Optional[dict] = None,
+        update_stats: bool = False,
+    ) -> tuple[dict, dict]:
         """
         Resets the environment and returns the initial state
 
@@ -247,11 +295,15 @@ class RansomGameEnv(gym.Env, ABC):
         self.steps_beyond_done = None
         initial_state = self.ransomgame_config.game_config.initial_state
         assert initial_state is not None
-        self.state.new_game(initial_state, self.a_cumulative_reward,
-                            self.d_cumulative_reward, update_stats=update_stats,
-                            randomize_state=self.ransomgame_config.randomize_env,
-                            num_attack_types=self.ransomgame_config.game_config.num_attack_types,
-                            np_random=self.np_random)
+        self.state.new_game(
+            initial_state,
+            self.a_cumulative_reward,
+            self.d_cumulative_reward,
+            update_stats=update_stats,
+            randomize_state=self.ransomgame_config.randomize_env,
+            num_attack_types=self.ransomgame_config.game_config.num_attack_types,
+            np_random=self.np_random,
+        )
         self.a_cumulative_reward = 0
         self.d_cumulative_reward = 0
         if self.viewer is not None:
@@ -272,7 +324,7 @@ class RansomGameEnv(gym.Env, ABC):
         self.state.restart()
         return obs
 
-    def render(self, mode: str ='human'):
+    def render(self, mode: str = "human"):
         """
         Renders the environment
 
@@ -292,7 +344,7 @@ class RansomGameEnv(gym.Env, ABC):
         if self.viewer is None:
             self.__setup_viewer()
             self.viewer.gameframe.set_state(self.state)
-        arr = self.viewer.render(return_rgb_array = mode=='rgb_array')
+        arr = self.viewer.render(return_rgb_array=mode == "rgb_array")
         self.state.attack_events = []
         self.state.defense_events = []
         return arr
@@ -317,7 +369,7 @@ class RansomGameEnv(gym.Env, ABC):
         if self.save_dir is not None and os.path.exists(self.save_dir):
             GameState.save(self.save_dir, self.state)
 
-    def save_trajectories(self, checkpoint = True) -> None:
+    def save_trajectories(self, checkpoint=True) -> None:
         """
         Saves the current list of game trajectories to disk
 
@@ -330,12 +382,12 @@ class RansomGameEnv(gym.Env, ABC):
         if self.ransomgame_config.save_trajectories:
             path = self.save_dir
             time_str = str(time.time())
-            filehandler = open(path + "/trajectories_" + time_str + suffix, 'wb')
+            filehandler = open(path + "/trajectories_" + time_str + suffix, "wb")
             pickle.dump(self.game_trajectories, filehandler)
         else:
             self.game_trajectories = []
 
-    def save_attack_data(self, checkpoint = True) -> None:
+    def save_attack_data(self, checkpoint=True) -> None:
         """
         Saves the attack statistics to disk
 
@@ -347,7 +399,9 @@ class RansomGameEnv(gym.Env, ABC):
             suffix = "_checkpoint.csv"
         if self.ransomgame_config.save_attack_stats:
             time_str = str(time.time())
-            with open(self.save_dir + "/attack_detections_stats_" + time_str + suffix, "w") as f:
+            with open(
+                self.save_dir + "/attack_detections_stats_" + time_str + suffix, "w"
+            ) as f:
                 writer = csv.writer(f)
                 writer.writerow(["target_node", "detected", "detection_val"])
                 for row in self.attack_detections:
@@ -412,7 +466,9 @@ class RansomGameEnv(gym.Env, ABC):
         Setup for the viewer to use for rendering
         :return: None
         """
-        resource_path = Path(__file__).parent / "rendering" / constants.RENDERING.RESOURCES_DIR
+        resource_path = (
+            Path(__file__).parent / "rendering" / constants.RENDERING.RESOURCES_DIR
+        )
         self.ransomgame_config.render_config.resources_dir = str(resource_path)
         self.viewer = Viewer(ransomgame_config=self.ransomgame_config)
         self.viewer.agent_start()
@@ -441,8 +497,14 @@ class RansomGameEnv(gym.Env, ABC):
         """
 
         states = list(
-            itertools.product(list(range(self.ransomgame_config.game_config.max_value + 1)), repeat=n_state_elems))
-        assert int(len(states)) == int(math.pow(self.ransomgame_config.game_config.max_value + 1, n_state_elems))
+            itertools.product(
+                list(range(self.ransomgame_config.game_config.max_value + 1)),
+                repeat=n_state_elems,
+            )
+        )
+        assert int(len(states)) == int(
+            math.pow(self.ransomgame_config.game_config.max_value + 1, n_state_elems)
+        )
 
         state_to_idx = {}
         for idx, s in enumerate(states):
@@ -485,7 +547,12 @@ class AttackerEnv(RansomGameEnv, ABC):
     attacker-agent should inherit this class
     """
 
-    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str, initial_state_path: str):
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
         """
         Initialization of the environment
 
@@ -497,8 +564,14 @@ class AttackerEnv(RansomGameEnv, ABC):
             raise ValueError("Cannot instantiate env without configuration")
         if ransomgame_config.defender_agent is None:
             raise ValueError("Cannot instantiate attacker-env without a defender agent")
-        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir, initial_state_path=initial_state_path)
-        self.observation_space = self.ransomgame_config.game_config.get_attacker_observation_space()
+        super().__init__(
+            ransomgame_config=ransomgame_config,
+            save_dir=save_dir,
+            initial_state_path=initial_state_path,
+        )
+        self.observation_space = (
+            self.ransomgame_config.game_config.get_attacker_observation_space()
+        )
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
         attacker_action = action
@@ -507,6 +580,50 @@ class AttackerEnv(RansomGameEnv, ABC):
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
         _, defender_action = action
         return 0, (0, 0), defender_action
+
+
+class DefenderEnv(RansomGameEnv, ABC):
+    """
+    Abstract DefenderEnv of the RansomGameEnv.
+
+    Environments where the defender is part of the environment and the environment is designed to be used by an
+    defender-agent should inherit this class
+    """
+
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
+        """
+        Initialization of the environment
+
+        :param save_dir: directory to save outputs of the env
+        :param initial_state_path: path to the initial state (if none, use default)
+        :param ransomgame_config: configuration of the environment (if not specified a default config is used)
+        """
+        if ransomgame_config is None:
+            raise ValueError("Cannot instantiate env without configuration")
+        if ransomgame_config.attacker_agent is None:
+            raise ValueError("Cannot instantiate attacker-env without a attacker agent")
+        super().__init__(
+            ransomgame_config=ransomgame_config,
+            save_dir=save_dir,
+            initial_state_path=initial_state_path,
+        )
+        self.observation_space = (
+            self.ransomgame_config.game_config.get_attacker_observation_space()
+        )
+
+    def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
+        attacker_action = action
+        return attacker_action
+
+    def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
+        defender_action = action
+        return defender_action
+
 
 class RansomGameMinimalDefenseV0Env(AttackerEnv):
     """
@@ -518,7 +635,13 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
     [Environment] Deterministic
     [Attacker Starting Position] Start node
     """
-    def __init__(self, ransomgame_config: RansomGameConfig, save_dir: str, initial_state_path: str):
+
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
         """
         Initialization of the environment
 
@@ -527,14 +650,66 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
         :param ransomgame_config: configuration of the environment (if not specified a default config is used)
         """
         if ransomgame_config is None:
-            game_config = GameConfig(manual_attacker=False, num_attack_types=2, manual_defender=False,
-                                     initial_state_path=None, ransomware=True)
+            game_config = GameConfig(
+                manual_attacker=False,
+                num_attack_types=2,
+                manual_defender=False,
+                initial_state_path=None,
+                ransomware=True,
+            )
             game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
             defender_agent = DummyAgent(game_config)
-            ransomgame_config = RansomGameConfig(game_config=game_config, defender_agent=defender_agent,
-                                                 initial_state_path=None, render_config=RenderConfig())
+            ransomgame_config = RansomGameConfig(
+                game_config=game_config,
+                defender_agent=defender_agent,
+                initial_state_path=None,
+                render_config=RenderConfig(),
+            )
             ransomgame_config.render_config.caption = "ransomgame-minimal_defense-v0"
-        super().__init__(ransomgame_config=ransomgame_config, save_dir=save_dir, initial_state_path=None)
+        super().__init__(
+            ransomgame_config=ransomgame_config,
+            save_dir=save_dir,
+            initial_state_path=None,
+        )
 
+    class RansomGameMinimalAttackV0Env(AttackerEnv):
+
+        def __init__(
+            self,
+            ransomgame_config: RansomGameConfig,
+            save_dir: str,
+            initial_state_path: str,
+        ):
+            """
+            Initialization of the environment
+
+            :param save_dir: directory to save outputs of the env
+            :param initial_state_path: path to the initial state (if none, use default)
+            :param ransomgame_config: configuration of the environment (if not specified a default config is used)
+            """
+            if ransomgame_config is None:
+                game_config = GameConfig(
+                    manual_attacker=False,
+                    num_attack_types=2,
+                    manual_defender=False,
+                    initial_state_path=None,
+                    ransomware=True,
+                )
+                game_config.set_initial_state(defense_val=2, attack_val=0)
+                if initial_state_path is not None:
+                    game_config.set_load_initial_state(initial_state_path)
+                attacker_agent = DummyAgent(game_config)
+                ransomgame_config = RansomGameConfig(
+                    game_config=game_config,
+                    attacker_agent=attacker_agent,
+                    initial_state_path=None,
+                    render_config=RenderConfig(),
+                )
+                ransomgame_config.render_config.caption = "ransomgame-minimal_attack-v0"
+            super().__init__(
+                ransomgame_config=ransomgame_config,
+                save_dir=save_dir,
+                initial_state_path=None,
+            )

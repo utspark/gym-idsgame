@@ -1,10 +1,12 @@
 """
 Configuration for the ransomgame environment
 """
+
 from typing import Optional
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_idsgame.agents.agent import Agent
+
 
 class RansomGameConfig:
     """
@@ -15,19 +17,19 @@ class RansomGameConfig:
         self,
         render_config: RenderConfig,
         game_config: GameConfig,
-        defender_agent: Agent,
+        defender_agent: Optional[Agent] = None,
         attacker_agent: Optional[Agent] = None,
         initial_state_path: Optional[str] = None,
-        save_trajectories :bool = False,
-        save_attack_stats : bool = False,
-        randomize_env : bool = False,
-        local_view_observations : bool = False,
+        save_trajectories: bool = False,
+        save_attack_stats: bool = False,
+        randomize_env: bool = False,
+        local_view_observations: bool = False,
         # reconnaissance_actions : bool = False,
         # randomize_starting_position : bool = False,
         # reconnaissance_bool_features : bool = False,
         # extra_reconnaissance_reward : bool = False,
         # reconnaissance_reward : bool = False,
-        randomize_visibility : bool = True,
+        randomize_visibility: bool = True,
         # reconnaissance_detection_factor = 1,
     ):
         """

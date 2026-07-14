@@ -1,6 +1,7 @@
 """
 Game-specific configuration for the gym-idsgame environment
 """
+
 import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import Discrete
@@ -9,21 +10,22 @@ from gym_idsgame.envs.dao.network_config import NetworkConfig
 from typing import Optional
 from gym_ransomgame.envs.dao.game_state import GameState
 
+
 class GameConfig:
     """
     DTO with game configuration parameters
     """
-    def __init__(
-            self,
-            initial_state: Optional[GameState] = None,
-            ransomware: bool = False,
-            manual_attacker: bool = True,
-            num_attack_types: int = 10,
-            max_value: int = 1,
 
-            manual_defender: bool = False,
-            initial_state_path: Optional[str] = None,
-            dense_rewards: bool = False,
+    def __init__(
+        self,
+        initial_state: Optional[GameState] = None,
+        ransomware: bool = False,
+        manual_attacker: bool = False,
+        num_attack_types: int = 10,
+        max_value: int = 1,
+        manual_defender: bool = False,
+        initial_state_path: Optional[str] = None,
+        dense_rewards: bool = False,
     ):
         """
         Class constructor, initializes the DTO
@@ -51,12 +53,12 @@ class GameConfig:
         self.num_attack_types = num_attack_types
         self.max_value = max_value
         self.num_attack_actions = 5
-        self.num_defense_actions = 4
+        self.num_defense_actions = 2
         self.num_states = 1
         # self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)
         self.initial_state_path = initial_state_path
         # self.num_vulnerabilities_per_layer = None
-        self.initial_state: GameState = initial_state # type: ignore
+        self.initial_state: GameState = initial_state  # type: ignore
         if self.initial_state is None and self.initial_state_path is not None:
             self.initial_state = GameState.load(self.initial_state_path)
         if self.initial_state is None:
@@ -74,15 +76,15 @@ class GameConfig:
         self.initial_state = GameState.load(initial_state_path)
 
     def set_initial_state(
-            self,
-            # time: int = 0,
-            stages = np.zeros((1, 4), dtype=np.bool),
-            percent_exfiltrated = np.zeros((1, 4), dtype=np.bool),
-            percent_encrypted = np.zeros((1, 4), dtype=np.bool),
-            percent_benign_completed: float = 0,
-            local_detector_scores: np.ndarray = np.zeros((1, 4)),
-            global_detector_score: float = 0,
-            **kwargs
+        self,
+        # time: int = 0,
+        stages=np.zeros((1, 4), dtype=np.bool),
+        percent_exfiltrated=np.zeros((1, 4), dtype=np.bool),
+        percent_encrypted=np.zeros((1, 4), dtype=np.bool),
+        percent_benign_completed: float = 0,
+        local_detector_scores: np.ndarray = np.zeros((1, 4)),
+        global_detector_score: float = 0,
+        **kwargs
     ):
         """
         Utility function for setting the initial game state
@@ -98,7 +100,7 @@ class GameConfig:
             percent_encrypted=percent_encrypted,
             percent_benign_completed=percent_benign_completed,
             local_detector_scores=local_detector_scores,
-            global_detector_score=global_detector_score
+            global_detector_score=global_detector_score,
         )
 
     def get_attacker_observation_space(self) -> gym.spaces.Dict:
@@ -107,12 +109,14 @@ class GameConfig:
 
         :return: observation space
         """
-        observation_space = gym.spaces.Dict({
-            # "time": Discrete(n=300, start=0, dtype=np.int32),
-            "stages": gym.spaces.MultiBinary(n=4),
-            "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
-            "percent_encrypted": gym.spaces.MultiBinary(n=4),
-        })
+        observation_space = gym.spaces.Dict(
+            {
+                # "time": Discrete(n=300, start=0, dtype=np.int32),
+                "stages": gym.spaces.MultiBinary(n=4),
+                "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
+                "percent_encrypted": gym.spaces.MultiBinary(n=4),
+            }
+        )
         return observation_space
 
     def get_defender_observation_space(self) -> gym.spaces.Dict:
@@ -121,13 +125,16 @@ class GameConfig:
 
         :return: observation space
         """
-        observation_space = gym.spaces.Dict({
-            "local_detector_scores": gym.spaces.Box(low=0, high=10, shape=(1, 4), dtype=np.float32),
-            "global_detector_score": gym.spaces.Box(low=0, high=10, shape=(1,), dtype=np.float32),
-        })
+        # TODO should record action history in defender observations
+        observation_space = gym.spaces.Dict(
+            {
+                "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
+                "percent_encrypted": gym.spaces.MultiBinary(n=4),
+            }
+        )
         return observation_space
 
-    def get_action_space(self, defender :bool = False) -> gym.spaces.Discrete:
+    def get_action_space(self, defender: bool = False) -> gym.spaces.Discrete:
         """
         Creates an OpenAi-Gym space for the actions in the environment
 
@@ -138,4 +145,3 @@ class GameConfig:
             return gym.spaces.Discrete(self.num_defense_actions)
         else:
             return gym.spaces.Discrete(self.num_attack_actions)
-
