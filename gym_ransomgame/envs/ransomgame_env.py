@@ -100,6 +100,7 @@ class RansomGameEnv(gym.Env, ABC):
             percent_benign_completed=np.zeros((1, 4), dtype=bool),
             local_detector_scores=np.zeros((1, 4)),
             global_detector_score=0.0,
+            num_attack_actions=game_config.num_attack_actions,
         )
         self.state = game_config.initial_state
 
@@ -306,7 +307,7 @@ class RansomGameEnv(gym.Env, ABC):
             self.d_cumulative_reward,
             update_stats=update_stats,
             randomize_state=self.ransomgame_config.randomize_env,
-            num_attack_types=self.ransomgame_config.game_config.num_attack_types,
+            # num_attack_types=self.ransomgame_config.game_config.num_attack_types,
             np_random=self.np_random,
         )
         self.a_cumulative_reward = 0

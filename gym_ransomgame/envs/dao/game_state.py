@@ -66,6 +66,7 @@ class GameState:
         num_hacks: int = 0,
         hacked: bool = False,
         np_random: Optional[np.random.Generator] = None,
+        num_attack_actions: int = 0,
     ):
         """
         Constructor, initializes the DTO
@@ -125,6 +126,7 @@ class GameState:
             np_random if np_random is not None else np.random.default_rng()
         )
         self.action_descriptors = ["RE", "F1", "F2", "EX"]
+        self.num_attack_actions = num_attack_actions
 
     def default_state(
         self,
@@ -144,7 +146,14 @@ class GameState:
         :param visibility_p: probability of visibility
         :return: None
         """
-        self.set_state(np.zeros((1, 4)), 0.0, 0.0, np.zeros((1, 4)), 0.0)
+        self.set_state(
+            stages=np.zeros((1, 4)),
+            percent_encrypted=np.zeros((1, 4)),
+            percent_exfiltrated=np.zeros((1, 4)),
+            percent_benign_completed=np.zeros((1, 4)),
+            local_detector_scores=np.zeros((1, 4)),
+            global_detector_score=0.0,
+        )
         # self.defense_det = np.zeros((num_rows * num_cols, num_attack_types))
         # self.defense_values = np.zeros((num_rows * num_cols, num_attack_types))
         # self.attack_values = np.zeros((num_rows * num_cols, num_attack_types))
@@ -172,6 +181,7 @@ class GameState:
         percent_benign_completed=None,
         local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0.0,
+        num_attack_actions: int = 0,
     ):
         """
         Sets the state
@@ -182,6 +192,7 @@ class GameState:
         :param percent_benign_completed: percent benign completed as progress bar
         :param local_detector_scores: local detector scores
         :param global_detector_score: global detector score
+        :param num_attack_actions: number of possible attack actions taken
         :return: None
         """
         self.stages = stages if stages is not None else np.zeros((1, 4))
@@ -206,6 +217,7 @@ class GameState:
             else np.zeros((1, 4))
         )
         self.global_detector_score = global_detector_score
+        self.num_attack_actions = num_attack_actions
 
     def new_game(
         self,
@@ -214,7 +226,7 @@ class GameState:
         d_reward: float = 0.0,
         update_stats: bool = True,
         randomize_state: bool = False,
-        num_attack_types: int = 0,
+        # num_attack_types: int = 0,
         np_random: Optional[np.random.Generator] = None,
     ) -> None:
         """
@@ -257,7 +269,7 @@ class GameState:
             self.attack_values = np.copy(init_state.attack_values)
             self.defense_values = np.copy(init_state.defense_values)
         else:
-            self.set_state(num_attack_types)
+            self.set_state()
         self.detected = False
         self.hacked = False
         self.attack_successful = False
@@ -362,8 +374,11 @@ class GameState:
                 self.get_consecutive_attack_attempts(attack_type)
             )
 
-        # no reward for benign
+        # no reward for benign, idle, or self-termination
         if attack_type >= self.stages.shape[1]:
+            # if attacker terminates
+            if attack_type == self.num_attack_actions - 1:
+                self.done = True
             return reward, 0
 
         # penalize staying in completed stages
