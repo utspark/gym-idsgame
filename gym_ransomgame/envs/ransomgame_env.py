@@ -199,7 +199,7 @@ class RansomGameEnv(gym.Env, ABC):
             obs = self.get_observation()
             return (
                 obs,
-                (float(100 * constants.GAME_CONFIG.NEGATIVE_REWARD), 0),
+                (float(100 * constants.GAME_CONFIG.NEGATIVE_REWARD), self._no_alarm_terminal_reward()),
                 True,
                 False,
                 info,
@@ -243,6 +243,9 @@ class RansomGameEnv(gym.Env, ABC):
             self.state.done = True
             self.state.detected = True
             reward = self.get_detect_reward()
+        elif self.state.done:
+            attacker_reward, _ = reward
+            reward = (attacker_reward, self._no_alarm_terminal_reward())
 
         if self.ransomgame_config.save_attack_stats:
             self.attack_detections.append([detected, self.state.stages])
@@ -423,11 +426,23 @@ class RansomGameEnv(gym.Env, ABC):
 
     def get_detect_reward(self, *args, **kwargs) -> tuple[float, Any]:
         """
-        Returns the attacker and defender reward in the case when the attacker was detected.
+        Reward when the defender raises an alarm (action 1).
+
+        TP (ransomware=True): defender gets defense_score ∈ (0, 1] — higher when caught early.
+        FP (ransomware=False): defender gets -1.
 
         :return: (attacker_reward, defender_reward)
         """
         return float(-1), self.state.defense_score(self.ransomgame_config.game_config)
+
+    def _no_alarm_terminal_reward(self) -> float:
+        """
+        Defender reward when the episode ends without the defender raising an alarm.
+
+        TN (ransomware=False): +1.0 — correctly quiet during benign traffic.
+        FN (ransomware=True):  -1.0 — missed the attack.
+        """
+        return 1.0 if not self.ransomgame_config.game_config.ransomware else -1.0
 
     # def get_successful_attack_reward(self, attack_action) -> tuple[Any, float]:
     #     """

@@ -9,6 +9,7 @@ from gym_idsgame.agents.dao.experiment_result import ExperimentResult
 from gym_idsgame.agents.training_agents.q_learning.q_agent import QAgent
 from gym_idsgame.agents.training_agents.q_learning.q_agent_config import QAgentConfig
 from gym_ransomgame.envs import RansomGameEnv
+from gym_ransomgame.envs.dao.game_state import GameState
 
 
 class RansomTabularQAgent(QAgent):
@@ -111,6 +112,9 @@ class RansomTabularQAgent(QAgent):
 
         # Training
         for episode in range(self.config.num_episodes):
+            is_attack = episode % 2 == 0
+            self.env.ransomgame_config.game_config.ransomware = is_attack
+
             episode_attacker_reward = 0
             episode_defender_reward = 0
             episode_step = 0
@@ -126,7 +130,17 @@ class RansomTabularQAgent(QAgent):
                 # Default initialization
                 s_idx_a = 0
                 s_idx_d = 0
-                attacker_action = 0
+                # Kill-chain attacker: advance to the lowest incomplete stage (0→1→2→3).
+                # Stage completion is probabilistic, so the number of steps per stage
+                # is stochastic. Benign episodes use IDLE throughout.
+                if is_attack:
+                    stages = self.env.state.stages[0]
+                    attacker_action = next(
+                        (i for i, done_stage in enumerate(stages) if not done_stage),
+                        GameState.IDLE,
+                    )
+                else:
+                    attacker_action = GameState.IDLE
                 defender_action = 0
 
                 # Get attacker and defender actions
