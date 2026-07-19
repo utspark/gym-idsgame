@@ -22,9 +22,11 @@ class GameState:
     EXFILTRATION = 2
     ENCRYPTION = 3
     IDLE = 4
+    TERMINATE = 5
 
     # Reward Constants
-    DEFAULT_REWARD = -0.1
+    DEFAULT_ATTACK_REWARD = -0.1
+    DEFAULT_DEFENSE_REWARD = 0.1
     PROGRESS_REWARD = 0.2
     STAGE_REWARD = 0.5
     EXFILTRATION_REWARD = 1.5
@@ -86,7 +88,7 @@ class GameState:
         :param hacked: True if the attacker hacked the data node otherwise False
         """
         self.attack_successful = False
-        self.stages = np.zeros((1, 4))
+        self.stages = np.zeros((1, 4), dtype=int)
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
         self.percent_exfiltrated = np.zeros(
             (1, 4), dtype=bool
@@ -358,14 +360,12 @@ class GameState:
             p_base, p_progress, self.get_consecutive_attack_attempts(attack_type)
         )
 
-    def simulate_stage(
-        self, attack_type: int, exponential: bool = True
-    ) -> Tuple[float, float]:
+    def simulate_stage(self, attack_type: int, exponential: bool = True) -> float:
         """
         Generic helper to simulate any attack type.
         """
         self.add_attack_event(attack_type)
-        reward = self.DEFAULT_REWARD
+        reward = self.DEFAULT_ATTACK_REWARD
 
         assert self.np_random is not None
 
@@ -379,11 +379,11 @@ class GameState:
             # if attacker terminates
             if attack_type == self.num_attack_actions - 1:
                 self.done = True
-            return reward, 0
+            return reward
 
         # penalize staying in completed stages
         if self.stages[0, attack_type] == 1:
-            return reward, 0
+            return reward
 
         reward += self.PROGRESS_REWARD
 
@@ -455,7 +455,7 @@ class GameState:
                 self.hacked = True
                 self.done = True
 
-        return reward, 0
+        return reward
 
     def simulate_detection(self, attack_type: int) -> bool:
         """
@@ -496,30 +496,10 @@ class GameState:
         """
         attacker_observation = {
             "stages": self.stages.flatten().astype(int),
-            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
             "percent_exfiltrated": self.percent_exfiltrated.flatten().astype(int),
+            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
         }
         return attacker_observation
-
-    def get_attacker_node_from_observation(
-        self, observation: np.ndarray, reconnaissance: bool = False
-    ) -> int:
-        """
-        Extracts which node the attacker is currently at from the observation representation
-
-        :param observation: the observation representation emitted from the environment
-        :param reconnaissance: boolean flag indicating whether the observation is from an env with reconnaissance state
-        :return: the id of the node that the attacker is in
-        """
-
-        for node_id in range(len(observation)):
-            if not reconnaissance:
-                if observation[node_id][-1] == 1:
-                    return node_id
-            else:
-                if observation[node_id][self.attack_values.shape[1]] == 1:
-                    return node_id
-        raise AssertionError("Could not find the node that the attacker is in")
 
     def add_attack_event(self, attack_type: int) -> None:
         """
@@ -554,7 +534,6 @@ class GameState:
         defender_observation = {
             # "stages": self.stages.flatten().astype(int),
             "percent_encrypted": self.percent_encrypted.flatten().astype(int),
-            "percent_exfiltrated": self.percent_exfiltrated.flatten().astype(int),
             # "local_detector_scores": self.local_detector_scores.astype(np.float32),
             # "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
         }

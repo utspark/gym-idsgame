@@ -140,7 +140,7 @@ class RansomGameEnv(gym.Env, ABC):
         #  - defense: what alarms have triggered?
         #  - n_state_elems += len(self.state.stage_time_spent)
         n_state_elems = game_config.stages.shape[1] if is_attacker else 0
-        n_state_elems += self.state.percent_exfiltrated.shape[1]
+        n_state_elems += self.state.percent_exfiltrated.shape[1] if is_attacker else 0
         n_state_elems += self.state.percent_encrypted.shape[1]
         """
         n_state_elems += 3  # local_detector_score
@@ -192,14 +192,16 @@ class RansomGameEnv(gym.Env, ABC):
 
         # Initialization
         trajectory: List[Any] = [self.state]
-        reward: Tuple[float, float] = (-0.1, float(0))
+        reward: Tuple[float, float] = (-0.1, float(0.1))
         info = {"detected": False}
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
             obs = self.get_observation()
             return (
                 obs,
-                (float(100 * constants.GAME_CONFIG.NEGATIVE_REWARD), self._no_alarm_terminal_reward()),
+                self._terminal_reward(
+                    False, float(100 * constants.GAME_CONFIG.NEGATIVE_REWARD)
+                ),
                 True,
                 False,
                 info,
@@ -227,7 +229,8 @@ class RansomGameEnv(gym.Env, ABC):
         # self.state.add_attack_event(target_pos, attack_type, self.state.attacker_pos, reconnaissance)
         # self.attacks.append((target_node_id, attack_type, self.state.game_step, reconnaissance))
 
-        reward = self.state.simulate_stage(attack_type=attack_action, exponential=True)
+        attacker_reward = self.state.simulate_stage(attack_type=attack_action, exponential=True)
+        reward = (attacker_reward, reward[1])
 
         if self.ransomgame_config.save_attack_stats:
             self.total_attacks.append([attack_action, self.state.attack_successful])
@@ -242,10 +245,10 @@ class RansomGameEnv(gym.Env, ABC):
             info["detected"] = True
             self.state.done = True
             self.state.detected = True
-            reward = self.get_detect_reward()
+            reward = self._terminal_reward(True)
         elif self.state.done:
             attacker_reward, _ = reward
-            reward = (attacker_reward, self._no_alarm_terminal_reward())
+            reward = self._terminal_reward(False, attacker_reward)
 
         if self.ransomgame_config.save_attack_stats:
             self.attack_detections.append([detected, self.state.stages])
@@ -424,25 +427,33 @@ class RansomGameEnv(gym.Env, ABC):
             self.attack_detections = []
             self.total_attacks = []
 
-    def get_detect_reward(self, *args, **kwargs) -> tuple[float, Any]:
+    def _terminal_reward(
+        self, detected: bool, attacker_reward: float = 0.0
+    ) -> tuple[float, float]:
         """
-        Reward when the defender raises an alarm (action 1).
+        Compute terminal rewards for both agents.
 
-        TP (ransomware=True): defender gets defense_score ∈ (0, 1] — higher when caught early.
-        FP (ransomware=False): defender gets -1.
+        When detected:
+            TP (ransomware=True):  attacker=-1, defender=defense_score (higher when caught early)
+            FP (ransomware=False): attacker=+1, defender=-2
+        When not detected:
+            TN (ransomware=False): attacker=attacker_reward, defender=+1
+            FN (ransomware=True):  attacker=attacker_reward, defender=-1
 
+        :param detected: whether the defender raised an alarm
+        :param attacker_reward: attacker reward to use when not detected (ignored when detected)
         :return: (attacker_reward, defender_reward)
         """
-        return float(-1), self.state.defense_score(self.ransomgame_config.game_config)
-
-    def _no_alarm_terminal_reward(self) -> float:
-        """
-        Defender reward when the episode ends without the defender raising an alarm.
-
-        TN (ransomware=False): +1.0 — correctly quiet during benign traffic.
-        FN (ransomware=True):  -1.0 — missed the attack.
-        """
-        return 1.0 if not self.ransomgame_config.game_config.ransomware else -1.0
+        ransomware = self.ransomgame_config.game_config.ransomware
+        if detected:
+            if ransomware:
+                return float(-1), self.state.defense_score(
+                    self.ransomgame_config.game_config
+                )
+            else:
+                return float(1), float(-10)
+        else:
+            return attacker_reward, (1.0 if not ransomware else -1.0)
 
     # def get_successful_attack_reward(self, attack_action) -> tuple[Any, float]:
     #     """
@@ -531,10 +542,7 @@ class RansomGameEnv(gym.Env, ABC):
             )
 
         else:
-            state_key = (
-                tuple(int(x) for x in observation["percent_exfiltrated"]),
-                tuple(int(x) for x in observation["percent_encrypted"]),
-            )
+            state_key = (tuple(int(x) for x in observation["percent_encrypted"]),)
 
         # TODO fix this later when expanding state
         # state_key = state_key[0]
