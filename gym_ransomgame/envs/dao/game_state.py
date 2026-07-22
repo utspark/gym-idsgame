@@ -33,11 +33,17 @@ class GameState:
     ENCRYPTION_REWARD = 2.5
 
     ATTACK_CONFIGS = MappingProxyType(
+        # {
+        #     RECONNAISSANCE: (0.1, 0.1),
+        #     COMPRESSION: (0.1, 0.1),
+        #     EXFILTRATION: (0.1, 0.1),
+        #     ENCRYPTION: (0.1, 0.1),
+        # }
         {
-            RECONNAISSANCE: (0.1, 0.1),
-            COMPRESSION: (0.1, 0.1),
-            EXFILTRATION: (0.1, 0.1),
-            ENCRYPTION: (0.1, 0.1),
+            RECONNAISSANCE: (0.2, 0.2),
+            COMPRESSION: (0.2, 0.2),
+            EXFILTRATION: (0.2, 0.2),
+            ENCRYPTION: (0.2, 0.2),
         }
     )
 

@@ -37,7 +37,7 @@ def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentCon
         eval_log_frequency=1,
         video_fps=5,
         video_dir=str(results_dir / "videos" / str(random_seed)),
-        num_episodes=6001,
+        num_episodes=2001, # 6001,
         eval_render=False,
         gifs=True,
         gif_dir=str(results_dir / "gifs" / str(random_seed)),
@@ -63,19 +63,27 @@ def main() -> None:
         q_table_filename = f"{table_tag}_attacker_q_table.npy"
     else:
         env_name = "ransomgame-minimal_attack-v0"
-        q_table_filename = None
+        table_tag = "1784755384.3270953"
+        q_table_filename = f"{table_tag}_defender_q_table.npy"
 
     env = gym.make(env_name, save_dir=config.save_dir)
     agent = RansomTabularQAgent(env.unwrapped, config)
 
     if load_q_table and q_table_filename:
-        agent.Q_attacker = np.load(Path(agent.config.save_dir) / q_table_filename)
+        if attacker:
+            agent.Q_attacker = np.load(Path(agent.config.save_dir) / q_table_filename)
+        else:
+            agent.Q_defender = np.load(Path(agent.config.save_dir) / q_table_filename)
     else:
         agent.train()
 
     train_result = agent.train_result
     eval_result = agent.eval_result
 
+    table = agent.Q_defender
+
+    for i in range(table.shape[0]):
+        print(table[i])
 
 if __name__ == "__main__":
     main()
