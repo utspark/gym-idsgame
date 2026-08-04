@@ -43,8 +43,8 @@ class GameConfig:
         self.ransomware = ransomware
         self.time = 0
         self.stages = np.zeros((1, 4), dtype=np.bool)
-        self.percent_exfiltrated = np.zeros((1, 4), dtype=np.bool)
-        self.percent_encrypted = np.zeros((1, 4), dtype=np.bool)
+        self.exfiltration_level = 0
+        self.encryption_level = 0
         self.benign_completed = 0
         self.local_detector_scores = np.zeros((1, 4))
         self.global_detector_score = 0
@@ -82,11 +82,11 @@ class GameConfig:
     def set_initial_state(
         self,
         # time: int = 0,
-        stages=np.zeros((1, 4), dtype=np.bool),
-        percent_exfiltrated=np.zeros((1, 4), dtype=np.bool),
-        percent_encrypted=np.zeros((1, 4), dtype=np.bool),
+        stages=None,
+        exfiltration_level: int = 0,
+        encryption_level: int = 0,
         percent_benign_completed: float = 0,
-        local_detector_scores: np.ndarray = np.zeros((1, 4)),
+        local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0,
         **kwargs
     ):
@@ -99,11 +99,15 @@ class GameConfig:
         """
         self.initial_state.set_state(
             # time=time,
-            stages=stages,
-            percent_exfiltrated=percent_exfiltrated,
-            percent_encrypted=percent_encrypted,
+            stages=np.zeros((1, 4), dtype=np.bool) if stages is None else stages,
+            exfiltration_level=exfiltration_level,
+            encryption_level=encryption_level,
             percent_benign_completed=percent_benign_completed,
-            local_detector_scores=local_detector_scores,
+            local_detector_scores=(
+                np.zeros((1, 4))
+                if local_detector_scores is None
+                else local_detector_scores
+            ),
             global_detector_score=global_detector_score,
         )
 
@@ -117,8 +121,8 @@ class GameConfig:
             {
                 # "time": Discrete(n=300, start=0, dtype=np.int32),
                 "stages": gym.spaces.MultiBinary(n=4),
-                "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
-                "percent_encrypted": gym.spaces.MultiBinary(n=4),
+                "exfiltration_level": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
+                "encryption_level": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
             }
         )
         return observation_space
@@ -130,10 +134,12 @@ class GameConfig:
         :return: observation space
         """
         # TODO should record action history in defender observations
+        # NOTE: kept in sync with GameState.get_defender_observation, which currently
+        # emits only the encryption bar. Add exfiltration_level here (and there) to make
+        # exfiltration progress visible to the defender.
         observation_space = gym.spaces.Dict(
             {
-                "percent_exfiltrated": gym.spaces.MultiBinary(n=4),
-                "percent_encrypted": gym.spaces.MultiBinary(n=4),
+                "encryption_level": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
             }
         )
         return observation_space

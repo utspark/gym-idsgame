@@ -23,13 +23,19 @@ class RansomTabularQAgent(QAgent):
         super().__init__(env, config)
 
         self.env: RansomGameEnv = env
-        self.state_to_idx = self.env.build_state_to_idx_map()
+
+        if config.tab_full_state_space:
+            raise NotImplementedError(
+                "tab_full_state_space is not supported by RansomTabularQAgent: the "
+                "RansomGame state id is a mixed-radix encoding (see "
+                "RansomGameEnv.get_state_id), not a flat radix-(max_value+1) code."
+            )
 
         self.Q_attacker = np.zeros(
-            (self.env.num_states_full, self.env.num_attack_actions)
+            (self.env.num_attacker_states, self.env.num_attack_actions)
         )
         self.Q_defender = np.zeros(
-            (self.env.num_states_full, self.env.num_defense_actions)
+            (self.env.num_defender_states, self.env.num_defense_actions)
         )
 
         self.env.ransomgame_config.save_trajectories = False
@@ -184,6 +190,7 @@ class RansomTabularQAgent(QAgent):
             self.num_train_games_total += 1
             if self.env.ransomgame_config.game_config.ransomware:
                 self.num_train_ransomware_games += 1
+                self.num_train_ransomware_games_total += 1
 
             if self.env.state.hacked:
                 self.num_train_hacks += 1
@@ -304,12 +311,6 @@ class RansomTabularQAgent(QAgent):
         return self.train_result
 
     def _resolve_state_idx(self, obs, other_obs) -> int:
-        if self.config.tab_full_state_space:
-            if self.env.fully_observed():
-                obs = np.append(obs, other_obs)
-            t = tuple(obs.astype(int).flatten().tolist())
-            t = tuple(min(x, self.max_value) for x in t)
-            return self.state_to_idx[t]
         return self.env.get_state_id(obs)
 
     def _get_action(

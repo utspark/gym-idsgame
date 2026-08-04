@@ -1,12 +1,10 @@
 import csv
-import itertools
 import os
 import pickle
 import time
 from pathlib import Path
 
 import gymnasium as gym
-import math
 import numpy as np
 
 from typing import Union, Any, Literal, Optional, List, Tuple
@@ -95,8 +93,8 @@ class RansomGameEnv(gym.Env, ABC):
         game_config.initial_state.set_state(
             # time=0,
             stages=np.zeros((1, 4)),
-            percent_exfiltrated=np.zeros((1, 4), dtype=bool),
-            percent_encrypted=np.zeros((1, 4), dtype=bool),
+            exfiltration_level=0,
+            encryption_level=0,
             percent_benign_completed=np.zeros((1, 4), dtype=bool),
             local_detector_scores=np.zeros((1, 4)),
             global_detector_score=0.0,
@@ -132,26 +130,16 @@ class RansomGameEnv(gym.Env, ABC):
             float(constants.GAME_CONFIG.POSITIVE_REWARD),
         )
 
-        # Attacker state includes stage progress; defender only sees exfiltration/encryption.
-        # TODO fix this as state expands
+        # Attacker state includes stage progress; defender only sees encryption progress.
         # TODO think about what the environment states are
         #  - they are different between attacker and defender
         #  - attack: what stages have been achieved/reached
         #  - defense: what alarms have triggered?
-        #  - n_state_elems += len(self.state.stage_time_spent)
-        n_state_elems = game_config.stages.shape[1] if is_attacker else 0
-        n_state_elems += self.state.percent_exfiltrated.shape[1] if is_attacker else 0
-        n_state_elems += self.state.percent_encrypted.shape[1]
-        """
-        n_state_elems += 3  # local_detector_score
-        n_state_elems += 1  # global_detector_score
-        """
-
-        self.n_state_elems = n_state_elems
-        self.state_to_idx = self.build_state_to_idx_map()
-        self.num_states = self.n_state_elems
-        self.num_states_full = int(
-            math.pow(game_config.max_value + 1, self.n_state_elems)
+        #  - the detector scores and stage_time_spent are not observed yet
+        self.num_attacker_states = int(np.prod(self.attacker_state_dims))
+        self.num_defender_states = int(np.prod(self.defender_state_dims))
+        self.num_states_full = (
+            self.num_attacker_states if is_attacker else self.num_defender_states
         )
 
         self.num_attack_actions = game_config.num_attack_actions
@@ -505,61 +493,53 @@ class RansomGameEnv(gym.Env, ABC):
         self.viewer = Viewer(ransomgame_config=self.ransomgame_config)
         self.viewer.agent_start()
 
-    def build_state_to_idx_map(self):
+    @property
+    def attacker_state_dims(self) -> Tuple[int, ...]:
         """
-        Builds a map that maps states to index (useful when constructing Q-tables for example)
+        Cardinality of each element of the attacker observation, in key order.
 
-        :return: the lookup map
+        The progress bars are ordinal (0..N_PROGRESS_STEPS) rather than 4 independent bits,
+        so the radix is mixed: 2**4 stage combinations x 5 exfiltration levels x 5 encryption
+        levels = 400 states, versus 2**12 = 4096 for the thermometer-coded equivalent.
+
+        :return: the per-element cardinalities
         """
-        states = list(
-            itertools.product(
-                list(range(self.ransomgame_config.game_config.max_value + 1)),
-                repeat=self.n_state_elems,
-            )
-        )
-        assert int(len(states)) == int(
-            math.pow(
-                self.ransomgame_config.game_config.max_value + 1, self.n_state_elems
-            )
-        )
+        n_levels = GameState.N_PROGRESS_STEPS + 1
+        n_stages = self.ransomgame_config.game_config.stages.shape[1]
+        return (2,) * n_stages + (n_levels, n_levels)
 
-        state_to_idx = {}
-        for idx, s in enumerate(states):
-            state_to_idx[s] = idx
-        return state_to_idx
+    @property
+    def defender_state_dims(self) -> Tuple[int, ...]:
+        """
+        Cardinality of each element of the defender observation, in key order.
+
+        :return: the per-element cardinalities
+        """
+        return (GameState.N_PROGRESS_STEPS + 1,)
 
     def get_state_id(self, observation: Any) -> int:
         """
-        Convert a RansomGame attacker observation into a stable integer state id.
+        Convert a RansomGame observation into a stable integer state id.
+
+        The id is a mixed-radix encoding of the observation, so it is a bijection onto
+        [0, num_*_states) with no lookup table and no dynamic state discovery. Dispatches on
+        the observation contents so that attacker and defender ids can be requested from the
+        same env instance.
+
+        :param observation: an attacker or defender observation
+        :return: the state id
         """
-
-        if self.ransomgame_config.game_config.attacker:
-            state_key = (
-                # int(observation["time"]),
-                tuple(int(x) for x in observation["stages"]),
-                tuple(int(x) for x in observation["percent_exfiltrated"]),
-                tuple(int(x) for x in observation["percent_encrypted"]),
+        if "stages" in observation:
+            key = tuple(int(x) for x in observation["stages"]) + (
+                int(observation["exfiltration_level"]),
+                int(observation["encryption_level"]),
             )
-
+            dims = self.attacker_state_dims
         else:
-            state_key = (tuple(int(x) for x in observation["percent_encrypted"]),)
+            key = (int(observation["encryption_level"]),)
+            dims = self.defender_state_dims
 
-        # TODO fix this later when expanding state
-        # state_key = state_key[0]
-        key = tuple(x for inner in state_key for x in inner)
-
-        if key not in self.state_to_idx:
-            next_state_id = len(self.state_to_idx)
-
-            # if next_state_id >= self.Q_attacker.shape[0]:
-            #     raise RuntimeError(
-            #         "RansomTabularQAgent discovered more states than Q_attacker was initialized for. "
-            #         "Increase env.num_states_full or switch Q_attacker to a dictionary-based table."
-            #     )
-
-            self.state_to_idx[key] = next_state_id
-
-        return self.state_to_idx[key]
+        return int(np.ravel_multi_index(key, dims))
 
 
 class AttackerEnv(RansomGameEnv, ABC):

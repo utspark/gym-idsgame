@@ -24,6 +24,20 @@ class GameState:
     IDLE = 4
     TERMINATE = 5
 
+    # Progress Constants
+    # The exfiltration/encryption progress bars are ordinal: a level in
+    # [0, N_PROGRESS_STEPS] that never decreases within an episode. Stored as a scalar
+    # rather than as a thermometer-coded bit array, since only N_PROGRESS_STEPS+1 of the
+    # 2**N_PROGRESS_STEPS bit patterns are reachable.
+    N_PROGRESS_STEPS = 4
+
+    # Trip points for the exponential-saturation model, keyed on the attack probability
+    PROGRESS_TRIPS = np.linspace(0.01, 0.501, N_PROGRESS_STEPS)
+
+    # Trip points for the consecutive-attempt model, keyed on the completion ratio in
+    # [0, 1]. Excludes 0 so that zero progress leaves the bar empty.
+    CONSECUTIVE_PROGRESS_TRIPS = np.linspace(0, 1, N_PROGRESS_STEPS + 1)[1:]
+
     # Reward Constants
     DEFAULT_ATTACK_REWARD = -0.1
     DEFAULT_DEFENSE_REWARD = 0.1
@@ -96,11 +110,9 @@ class GameState:
         self.attack_successful = False
         self.stages = np.zeros((1, 4), dtype=int)
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated = np.zeros(
-            (1, 4), dtype=bool
-        )  # exfiltration completion bar
-        # self.percent_exfiltrated: float = 0.0
-        self.percent_encrypted = np.zeros((1, 4), dtype=bool)
+        # completion bars, 0..N_PROGRESS_STEPS
+        self.exfiltration_level: int = 0
+        self.encryption_level: int = 0
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
         self.global_detector_score: float = 0.0
@@ -156,8 +168,8 @@ class GameState:
         """
         self.set_state(
             stages=np.zeros((1, 4)),
-            percent_encrypted=np.zeros((1, 4)),
-            percent_exfiltrated=np.zeros((1, 4)),
+            exfiltration_level=0,
+            encryption_level=0,
             percent_benign_completed=np.zeros((1, 4)),
             local_detector_scores=np.zeros((1, 4)),
             global_detector_score=0.0,
@@ -184,8 +196,8 @@ class GameState:
     def set_state(
         self,
         stages: Optional[np.ndarray] = None,
-        percent_exfiltrated=None,
-        percent_encrypted=None,
+        exfiltration_level: int = 0,
+        encryption_level: int = 0,
         percent_benign_completed=None,
         local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0.0,
@@ -195,8 +207,8 @@ class GameState:
         Sets the state
 
         :param stages: stages array
-        :param percent_exfiltrated: percent exfiltrated as progress bar
-        :param percent_encrypted: percent encrypted as progress bar
+        :param exfiltration_level: exfiltration progress bar level, 0..N_PROGRESS_STEPS
+        :param encryption_level: encryption progress bar level, 0..N_PROGRESS_STEPS
         :param percent_benign_completed: percent benign completed as progress bar
         :param local_detector_scores: local detector scores
         :param global_detector_score: global detector score
@@ -204,16 +216,8 @@ class GameState:
         :return: None
         """
         self.stages = stages if stages is not None else np.zeros((1, 4))
-        self.percent_exfiltrated = (
-            percent_exfiltrated
-            if percent_exfiltrated is not None
-            else np.zeros((1, 4), dtype=np.bool)
-        )
-        self.percent_encrypted = (
-            percent_encrypted
-            if percent_encrypted is not None
-            else np.zeros((1, 4), dtype=np.bool)
-        )
+        self.exfiltration_level = int(exfiltration_level)
+        self.encryption_level = int(encryption_level)
         self.percent_benign_completed = (
             percent_benign_completed
             if percent_benign_completed is not None
@@ -265,8 +269,8 @@ class GameState:
         self.defense_history = []
         self.stages = np.zeros((1, 4))
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        self.percent_exfiltrated = np.zeros((1, 4), dtype=bool)
-        self.percent_encrypted = np.zeros((1, 4), dtype=bool)
+        self.exfiltration_level = 0
+        self.encryption_level = 0
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores = np.zeros((1, 4))
         self.global_detector_score = 0.0
@@ -289,10 +293,21 @@ class GameState:
         :return: a copy of the current state
         """
         new_state = GameState()
-        for attr in ["attack_values", "defense_values", "defense_det"]:
+        for attr in [
+            "attack_values",
+            "defense_values",
+            "defense_det",
+            "stages",
+            "stage_time_spent",
+            "percent_benign_completed",
+            "local_detector_scores",
+        ]:
             setattr(new_state, attr, np.copy(getattr(self, attr)))
 
         for attr in [
+            "exfiltration_level",
+            "encryption_level",
+            "global_detector_score",
             "game_step",
             "attacker_cumulative_reward",
             "defender_cumulative_reward",
@@ -340,6 +355,24 @@ class GameState:
         if n < 1:
             return 0.0
         return 1 - (1 - p_base) * (1 - p_progress) ** (n - 1)
+
+    @classmethod
+    def _advanced_progress_level(
+        cls, level: int, value: float, trips: np.ndarray
+    ) -> int:
+        """
+        Advances an ordinal progress bar to the level implied by `value`.
+
+        The bar is monotone within an episode: `value` can fall (the consecutive-attempt
+        run resets whenever the attacker switches stage) but the level never does.
+
+        :param level: current level of the bar
+        :param value: progress signal, compared against the trip points
+        :param trips: strictly increasing trip points, one per level
+        :return: the new level, in [0, len(trips)]
+        """
+        reached = int(np.searchsorted(trips, value, side="right"))
+        return max(level, reached)
 
     def get_consecutive_attack_attempts(self, attack_type: int) -> int:
         history_len = 10
@@ -401,20 +434,16 @@ class GameState:
             ):
                 p = np.clip(p * 2, 0, 1)
 
-            # Update progress percentages
+            # Update progress bars
             if attack_type == self.EXFILTRATION:
-                for i, trip in enumerate(
-                    np.linspace(0.01, 0.501, num=self.percent_exfiltrated.shape[1])
-                ):
-                    if p > trip:
-                        self.percent_exfiltrated[0, i] = 1
+                self.exfiltration_level = self._advanced_progress_level(
+                    self.exfiltration_level, p, self.PROGRESS_TRIPS
+                )
 
             elif attack_type == self.ENCRYPTION:
-                for i, trip in enumerate(
-                    np.linspace(0.01, 0.501, num=self.percent_encrypted.shape[1])
-                ):
-                    if p >= trip:
-                        self.percent_encrypted[0, i] = 1
+                self.encryption_level = self._advanced_progress_level(
+                    self.encryption_level, p, self.PROGRESS_TRIPS
+                )
 
             stage_success = self.np_random.binomial(1, p) == 1
 
@@ -428,17 +457,17 @@ class GameState:
             ):
                 consecutive = np.clip(consecutive * 2, 0, requirement)
 
-            # Update progress percentages
+            # Update progress bars
             progress = consecutive / requirement
             if attack_type == self.EXFILTRATION:
-                for trip in np.linspace(0, 1, num=self.percent_exfiltrated.shape[1]):
-                    if progress > trip:
-                        self.percent_exfiltrated[0, trip] = 1
+                self.exfiltration_level = self._advanced_progress_level(
+                    self.exfiltration_level, progress, self.CONSECUTIVE_PROGRESS_TRIPS
+                )
 
             elif attack_type == self.ENCRYPTION:
-                for trip in np.linspace(0, 1, num=self.percent_encrypted.shape[1]):
-                    if progress > trip:
-                        self.percent_encrypted[0, trip] = 1
+                self.encryption_level = self._advanced_progress_level(
+                    self.encryption_level, progress, self.CONSECUTIVE_PROGRESS_TRIPS
+                )
 
             stage_success = consecutive >= requirement
 
@@ -448,15 +477,11 @@ class GameState:
 
             if attack_type == self.EXFILTRATION:
                 reward += self.EXFILTRATION_REWARD
-                self.percent_exfiltrated = np.ones(
-                    self.percent_exfiltrated.shape, dtype=bool
-                )
+                self.exfiltration_level = self.N_PROGRESS_STEPS
 
             if attack_type == self.ENCRYPTION:
                 reward += self.ENCRYPTION_REWARD
-                self.percent_encrypted = np.ones(
-                    self.percent_encrypted.shape, dtype=bool
-                )
+                self.encryption_level = self.N_PROGRESS_STEPS
                 self.attack_successful = True
                 self.hacked = True
                 self.done = True
@@ -490,7 +515,7 @@ class GameState:
         if not game_config.ransomware:
             return -1
         else:
-            return float(np.mean(1 - self.percent_encrypted))
+            return 1.0 - self.encryption_level / self.N_PROGRESS_STEPS
 
     def get_attacker_observation(self) -> dict[str, int | np.ndarray]:
         """
@@ -502,8 +527,8 @@ class GameState:
         """
         attacker_observation = {
             "stages": self.stages.flatten().astype(int),
-            "percent_exfiltrated": self.percent_exfiltrated.flatten().astype(int),
-            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
+            "exfiltration_level": int(self.exfiltration_level),
+            "encryption_level": int(self.encryption_level),
         }
         return attacker_observation
 
@@ -539,7 +564,7 @@ class GameState:
         """
         defender_observation = {
             # "stages": self.stages.flatten().astype(int),
-            "percent_encrypted": self.percent_encrypted.flatten().astype(int),
+            "encryption_level": int(self.encryption_level),
             # "local_detector_scores": self.local_detector_scores.astype(np.float32),
             # "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
         }
