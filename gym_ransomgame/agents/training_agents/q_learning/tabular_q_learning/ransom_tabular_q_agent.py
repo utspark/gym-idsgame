@@ -38,8 +38,56 @@ class RansomTabularQAgent(QAgent):
             (self.env.num_defender_states, self.env.num_defense_actions)
         )
 
+        # Ransomware-episode denominators for the eval hack probability. The base QAgent
+        # only tracks all-episode counters, and benign episodes can never be hacked.
+        self.num_eval_ransomware_games = 0
+        self.num_eval_ransomware_games_total = 0
+
+        # Exploration RNG. QAgent seeds the global np.random from config.random_seed, but
+        # owning a Generator keeps this agent's action sampling reproducible regardless of
+        # what else draws from the global stream.
+        self.np_random = np.random.default_rng(config.random_seed)
+
+        # The env RNG is separate: it is seeded on the first reset in train()/eval(),
+        # since Gymnasium seeds through reset() rather than at construction.
+        self._seeded = False
+
         self.env.ransomgame_config.save_trajectories = False
         self.env.ransomgame_config.save_attack_stats = True
+
+    @staticmethod
+    def _hack_probability(num_hacks: int, num_ransomware_games: int) -> float:
+        """
+        Fraction of ransomware episodes in which the attacker completed encryption.
+
+        Benign episodes are excluded from the denominator: they cannot be hacked, so
+        including them would cap the reported value at the ransomware/benign ratio.
+
+        :param num_hacks: number of hacked episodes
+        :param num_ransomware_games: number of ransomware episodes over the same window
+        :return: the hack probability, or 0.0 when no ransomware episodes were played
+        """
+        if num_ransomware_games <= 0:
+            return 0.0
+        return float(num_hacks) / float(num_ransomware_games)
+
+    def _reset_env(self, update_stats: bool) -> tuple:
+        """
+        Resets the env, seeding its RNG from config.random_seed on the first call.
+
+        Gymnasium takes the seed through reset(), and re-seeding on every episode would
+        make every episode play out identically, so the seed is passed exactly once and
+        every later episode continues that stream.
+
+        :param update_stats: whether the game count should be incremented
+        :return: (attacker_obs, defender_obs)
+        """
+        if not self._seeded:
+            self._seeded = True
+            return self.env.reset(
+                seed=self.config.random_seed, update_stats=update_stats
+            )
+        return self.env.reset(update_stats=update_stats)
 
     # def get_state_id(self, observation: Any) -> int:
     #     """
@@ -87,10 +135,10 @@ class RansomTabularQAgent(QAgent):
         if not legal_actions:
             raise AssertionError("No legal actions available")
 
-        if (np.random.random() < self.config.epsilon and not eval) or (
-            eval and np.random.random() < self.config.eval_epsilon
+        if (self.np_random.random() < self.config.epsilon and not eval) or (
+            eval and self.np_random.random() < self.config.eval_epsilon
         ):
-            return int(np.random.choice(legal_actions))
+            return int(self.np_random.choice(legal_actions))
 
         best_action = max(legal_actions, key=lambda action: q_table[s][action])
         return int(best_action)
@@ -101,7 +149,7 @@ class RansomTabularQAgent(QAgent):
         if len(self.train_result.avg_episode_steps) > 0:
             self.config.logger.warning("starting training with non-empty result object")
         done = False
-        obs = self.env.reset(update_stats=False)
+        obs = self._reset_env(update_stats=False)
         attacker_obs, defender_obs = obs
         obs_prime = obs
 
@@ -201,32 +249,16 @@ class RansomTabularQAgent(QAgent):
 
             # Log average metrics every <self.config.train_log_frequency> episodes
             if episode % self.config.train_log_frequency == 0:
-                if self.config.attacker:
-                    if self.num_train_games > 0 and self.num_train_games_total > 0:
-                        self.train_hack_probability = (
-                            self.num_train_hacks / self.num_train_games
-                        )
-                        self.train_cumulative_hack_probability = (
-                            self.num_train_hacks_total / self.num_train_games_total
-                        )
-                    else:
-                        self.train_hack_probability = 0.0
-                        self.train_cumulative_hack_probability = 0.0
-                else:
-                    if (
-                        self.num_train_ransomware_games > 0
-                        and self.num_train_ransomware_games_total > 0
-                    ):
-                        self.train_hack_probability = (
-                            self.num_train_hacks / self.num_train_ransomware_games
-                        )
-                        self.train_cumulative_hack_probability = (
-                            self.num_train_hacks_total
-                            / self.num_train_ransomware_games_total
-                        )
-                    else:
-                        self.train_hack_probability = 0.0
-                        self.train_cumulative_hack_probability = 0.0
+                # Only ransomware episodes can be hacked, so they are the only valid
+                # denominator. Attacker training sets ransomware=True for every episode,
+                # which makes this identical to dividing by num_train_games there. Kept
+                # in sync with the eval() computation so the two are comparable.
+                self.train_hack_probability = self._hack_probability(
+                    self.num_train_hacks, self.num_train_ransomware_games
+                )
+                self.train_cumulative_hack_probability = self._hack_probability(
+                    self.num_train_hacks_total, self.num_train_ransomware_games_total
+                )
 
                 self.log_metrics(
                     episode,
@@ -241,7 +273,11 @@ class RansomTabularQAgent(QAgent):
                 episode_attacker_rewards = []
                 episode_defender_rewards = []
                 episode_steps = []
+                # Reset the denominator with the numerator, otherwise the window's hack
+                # count is divided by every ransomware episode since episode 0 and the
+                # reported probability decays toward 0 regardless of the policy.
                 self.num_train_games = 0
+                self.num_train_ransomware_games = 0
                 self.num_train_hacks = 0
 
             # Run evaluation every <self.config.eval_frequency> episodes
@@ -274,7 +310,7 @@ class RansomTabularQAgent(QAgent):
 
             # Reset environment for the next episode and update game stats
             done = False
-            obs = self.env.reset(update_stats=True)
+            obs = self._reset_env(update_stats=True)
             attacker_obs, defender_obs = obs
             self.outer_train.update(1)
 
@@ -382,6 +418,7 @@ class RansomTabularQAgent(QAgent):
         time_str = str(time.time())
 
         self.num_eval_games = 0
+        self.num_eval_ransomware_games = 0
         self.num_eval_hacks = 0
 
         self.eval_result = ExperimentResult()
@@ -412,7 +449,7 @@ class RansomTabularQAgent(QAgent):
         #     "acc_D_R: {:.2f}".format(0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
         # Eval
-        obs = self.env.reset(update_stats=False)
+        obs = self._reset_env(update_stats=False)
         attacker_obs, defender_obs = obs
 
         # Get initial frame
@@ -521,6 +558,9 @@ class RansomTabularQAgent(QAgent):
             # Update eval stats
             self.num_eval_games += 1
             self.num_eval_games_total += 1
+            if ransomware_episode:
+                self.num_eval_ransomware_games += 1
+                self.num_eval_ransomware_games_total += 1
             self.eval_attacker_cumulative_reward += episode_attacker_reward
             self.eval_defender_cumulative_reward += episode_defender_reward
             if self.env.state.hacked:
@@ -529,14 +569,12 @@ class RansomTabularQAgent(QAgent):
 
             # Log average metrics every <self.config.eval_log_frequency> episodes
             if episode % self.config.eval_log_frequency == 0 and log:
-                if self.num_eval_games > 0:
-                    self.eval_hack_probability = float(self.num_eval_hacks) / float(
-                        self.num_eval_games
-                    )
-                if self.num_eval_games_total > 0:
-                    self.eval_cumulative_hack_probability = float(
-                        self.num_eval_hacks_total
-                    ) / float(self.num_eval_games_total)
+                self.eval_hack_probability = self._hack_probability(
+                    self.num_eval_hacks, self.num_eval_ransomware_games
+                )
+                self.eval_cumulative_hack_probability = self._hack_probability(
+                    self.num_eval_hacks_total, self.num_eval_ransomware_games_total
+                )
                 self.log_metrics(
                     episode,
                     self.eval_result,
@@ -579,7 +617,7 @@ class RansomTabularQAgent(QAgent):
 
             # Reset for new eval episode
             done = False
-            obs = self.env.reset(update_stats=False)
+            obs = self._reset_env(update_stats=False)
             attacker_obs, defender_obs = obs
             # Get initial frame
             # if self.config.video or self.config.gifs:
@@ -590,14 +628,12 @@ class RansomTabularQAgent(QAgent):
 
         # Log average eval statistics
         if log:
-            if self.num_eval_games > 0:
-                self.eval_hack_probability = float(self.num_eval_hacks) / float(
-                    self.num_eval_games
-                )
-            if self.num_eval_games_total > 0:
-                self.eval_cumulative_hack_probability = float(
-                    self.num_eval_hacks_total
-                ) / float(self.num_eval_games_total)
+            self.eval_hack_probability = self._hack_probability(
+                self.num_eval_hacks, self.num_eval_ransomware_games
+            )
+            self.eval_cumulative_hack_probability = self._hack_probability(
+                self.num_eval_hacks_total, self.num_eval_ransomware_games_total
+            )
             self.log_metrics(
                 train_episode,
                 self.eval_result,

@@ -37,7 +37,7 @@ def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentCon
         eval_log_frequency=1,
         video_fps=5,
         video_dir=str(results_dir / "videos" / str(random_seed)),
-        num_episodes=2001, # 6001,
+        num_episodes=2001,  # 6001,
         eval_render=False,
         gifs=True,
         gif_dir=str(results_dir / "gifs" / str(random_seed)),
@@ -46,6 +46,9 @@ def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentCon
         defender=not attacker,
         video_frequency=101,
         save_dir=str(results_dir / "data" / str(random_seed)),
+        # Without this the seed only names the output dirs: the agent falls back to
+        # QAgentConfig's default and the env RNG is never seeded at all.
+        random_seed=random_seed,
     )
 
 
@@ -80,10 +83,14 @@ def main() -> None:
     train_result = agent.train_result
     eval_result = agent.eval_result
 
-    table = agent.Q_defender
+    if attacker:
+        table = agent.Q_attacker
+    else:
+        table = agent.Q_defender
 
     for i in range(table.shape[0]):
         print(table[i])
+
 
 if __name__ == "__main__":
     main()

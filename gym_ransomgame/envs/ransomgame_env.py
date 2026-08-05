@@ -15,6 +15,7 @@ from numpy import ndarray
 from gym_idsgame.envs.constants import constants
 from gym_idsgame.agents.agent import Agent
 from gym_idsgame.envs.dao.render_config import RenderConfig
+from gym_ransomgame.envs.dao import ransomgame_config
 from gym_ransomgame.envs.rendering.viewer import Viewer
 
 from gym_idsgame.agents.bot_agents.bot_agent import BotAgent
@@ -217,7 +218,9 @@ class RansomGameEnv(gym.Env, ABC):
         # self.state.add_attack_event(target_pos, attack_type, self.state.attacker_pos, reconnaissance)
         # self.attacks.append((target_node_id, attack_type, self.state.game_step, reconnaissance))
 
-        attacker_reward = self.state.simulate_stage(attack_type=attack_action, exponential=True)
+        attacker_reward = self.state.simulate_stage(
+            attack_type=attack_action, exponential=True
+        )
         reward = (attacker_reward, reward[1])
 
         if self.ransomgame_config.save_attack_stats:
@@ -581,8 +584,8 @@ class AttackerEnv(RansomGameEnv, ABC):
         return attacker_action
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
-        _, defender_action = action
-        return 0, (0, 0), defender_action
+        defender_action = action
+        return defender_action
 
 
 class DefenderEnv(RansomGameEnv, ABC):
@@ -626,6 +629,43 @@ class DefenderEnv(RansomGameEnv, ABC):
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
         defender_action = action
         return defender_action
+
+
+class AttackDefenseEnv(RansomGameEnv, ABC):
+    """
+    Abstract AttackDefenseEnv of the RansomGameEnv.
+
+    Environments where both the attacker and defender are external to the environment should inherit this class.
+    """
+
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
+        """
+        Initialization of the environment
+
+        :param save_dir: directory to save outputs of the env
+        :param initial_state_path: path to the initial state (if none, use default)
+        :param ransomgame_config: configuration of the environment (if not specified a default config is used)
+        """
+        if ransomgame_config is None:
+            raise ValueError("Cannot instantiate env without configuration")
+        super().__init__(
+            ransomgame_config=ransomgame_config,
+            save_dir=save_dir,
+            initial_state_path=initial_state_path,
+        )
+
+    def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
+        defender_action = action
+        return defender_action
+
+    def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
+        attacker_action = action
+        return attacker_action
 
 
 class RansomGameMinimalDefenseV0Env(AttackerEnv):
@@ -720,4 +760,51 @@ class RansomGameMinimalAttackV0Env(DefenderEnv):
             ransomgame_config=ransomgame_config,
             save_dir=save_dir,
             initial_state_path=None,
+        )
+
+
+class RansomGameV0Env(AttackDefenseEnv):
+    """
+    [Rewards] Sparse
+    [Version] 0
+    [Observations] partially observed
+    [Environment] Deterministic
+    """
+
+    def __init__(
+        self,
+        ransomgame_config: RansomGameConfig,
+        save_dir: str,
+        initial_state_path: str,
+    ):
+        """
+        Initialization of the environment
+
+        :param save_dir: directory to save outputs of the env
+        :param initial_state_path: path to the initial state (if none, use default)
+        :param idsgame_config: configuration of the environment (if not specified a default config is used)
+        """
+        if ransomgame_config is None:
+            game_config = GameConfig(
+                manual_attacker=False,
+                manual_defender=False,
+                attacker=True,
+                defender=True,
+                num_attack_types=2,
+                initial_state_path=None,
+                ransomware=True,
+            )
+            game_config.set_initial_state(defense_val=2, attack_val=0)
+            if initial_state_path is not None:
+                game_config.set_load_initial_state(initial_state_path)
+            ransomgame_config = RansomGameConfig(
+                game_config=game_config,
+                initial_state_path=None,
+                render_config=RenderConfig(),
+            )
+            ransomgame_config.render_config.caption = "ransomgame-v0"
+        super().__init__(
+            ransomgame_config=ransomgame_config,
+            save_dir=save_dir,
+            initial_state_path=initial_state_path,
         )
