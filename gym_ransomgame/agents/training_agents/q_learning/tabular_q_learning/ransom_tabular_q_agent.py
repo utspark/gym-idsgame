@@ -71,6 +71,90 @@ class RansomTabularQAgent(QAgent):
             return 0.0
         return float(num_hacks) / float(num_ransomware_games)
 
+    def log_metrics(
+        self,
+        episode: int,
+        result: ExperimentResult,
+        attacker_episode_rewards: list,
+        defender_episode_rewards: list,
+        episode_steps: list,
+        episode_avg_attacker_loss: list = None,
+        episode_avg_defender_loss: list = None,
+        eval: bool = False,
+        update_stats: bool = True,
+        lr: float = None,
+    ) -> None:
+        """
+        Logs window metrics, reporting acc_A_R/acc_D_R the same way in both paths.
+
+        QAgent.log_metrics sources those two columns differently depending on `eval`: from
+        the env-side state.*_cumulative_reward when training, which new_game only advances
+        on episodes that ended in a hack or a detection, and from the agent-side
+        eval_*_cumulative_reward when evaluating, which is never reset across eval calls.
+        The two are therefore different quantities over different episode subsets, and
+        neither can be compared to the other.
+
+        Both are redefined here as the sum of episode returns over the same window the
+        line averages for avg_a_R/avg_d_R, so that acc == avg * len(window) holds in
+        either path and the value recorded to the CSV means one thing. The base method is
+        reached through the attributes it reads, so gym_idsgame stays untouched; the
+        originals are restored afterwards since the env keeps accumulating into them.
+
+        :param episode: the episode
+        :param result: the result object to add the results to
+        :param attacker_episode_rewards: attacker episode rewards for the window
+        :param defender_episode_rewards: defender episode rewards for the window
+        :param episode_steps: episode lengths for the window
+        :param episode_avg_attacker_loss: attacker loss for the window
+        :param episode_avg_defender_loss: defender loss for the window
+        :param eval: whether the metrics are logged in an evaluation context
+        :param update_stats: whether to update stats
+        :param lr: the learning rate
+        :return: None
+        """
+        window_attacker_reward = float(np.sum(attacker_episode_rewards))
+        window_defender_reward = float(np.sum(defender_episode_rewards))
+
+        if eval:
+            saved = (
+                self.eval_attacker_cumulative_reward,
+                self.eval_defender_cumulative_reward,
+            )
+            self.eval_attacker_cumulative_reward = window_attacker_reward
+            self.eval_defender_cumulative_reward = window_defender_reward
+        else:
+            saved = (
+                self.env.state.attacker_cumulative_reward,
+                self.env.state.defender_cumulative_reward,
+            )
+            self.env.state.attacker_cumulative_reward = window_attacker_reward
+            self.env.state.defender_cumulative_reward = window_defender_reward
+
+        try:
+            super().log_metrics(
+                episode,
+                result,
+                attacker_episode_rewards,
+                defender_episode_rewards,
+                episode_steps,
+                episode_avg_attacker_loss,
+                episode_avg_defender_loss,
+                eval=eval,
+                update_stats=update_stats,
+                lr=lr,
+            )
+        finally:
+            if eval:
+                (
+                    self.eval_attacker_cumulative_reward,
+                    self.eval_defender_cumulative_reward,
+                ) = saved
+            else:
+                (
+                    self.env.state.attacker_cumulative_reward,
+                    self.env.state.defender_cumulative_reward,
+                ) = saved
+
     def _reset_env(self, update_stats: bool) -> tuple:
         """
         Resets the env, seeding its RNG from config.random_seed on the first call.
