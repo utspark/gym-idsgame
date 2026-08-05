@@ -101,14 +101,21 @@ class RansomGameEnv(gym.Env, ABC):
             global_detector_score=0.0,
             num_attack_actions=game_config.num_attack_actions,
         )
-        self.state = game_config.initial_state
+        # Copy rather than alias: reset() passes game_config.initial_state to
+        # state.new_game() as the template to restore from, so the two must be distinct
+        # objects or the template is whatever the last episode left behind.
+        self.state = game_config.initial_state.copy()
 
         is_attacker = game_config.attacker
 
-        self.observation_space = (
-            game_config.get_attacker_observation_space()
-            if is_attacker
-            else game_config.get_defender_observation_space()
+        self.attacker_observation_space = game_config.get_attacker_observation_space()
+        self.defender_observation_space = game_config.get_defender_observation_space()
+        # reset() and step() always emit both observations, whichever agent is external,
+        # so the declared space is the pair. Declaring only one agent's space made the
+        # Gymnasium passive checker reject every observation. Use the per-agent
+        # attacker_/defender_observation_space attributes to size a single-agent model.
+        self.observation_space = gym.spaces.Tuple(
+            (self.attacker_observation_space, self.defender_observation_space)
         )
 
         self.attacker_action_space = game_config.get_action_space(defender=False)
@@ -275,14 +282,19 @@ class RansomGameEnv(gym.Env, ABC):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
         update_stats: bool = False,
-    ) -> tuple[dict, dict]:
+    ) -> tuple[tuple[dict, dict], dict]:
         """
         Resets the environment and returns the initial state
+
+        Follows the Gymnasium reset contract, (observation, info), where the observation
+        is itself the (attacker_obs, defender_obs) pair. Returning the two observations
+        as the top-level tuple would put the defender observation in the info slot of
+        every wrapper in the stack.
 
         :param seed: random seed
         :param options: options for resetting
         :param update_stats: whether the game count should be incremented or not
-        :return: the initial state
+        :return: ((attacker_obs, defender_obs), info)
         """
         super().reset(seed=seed)
         self.action_space._np_random = self.np_random
@@ -311,19 +323,19 @@ class RansomGameEnv(gym.Env, ABC):
         self.d_cumulative_reward = 0
         if self.viewer is not None:
             self.viewer.gameframe.reset()
-        attacker_obs, defender_obs = self.get_observation()
+        obs = self.get_observation()
         self.defenses = []
         self.attacks = []
         self.num_failed_attacks = 0
-        return attacker_obs, defender_obs
+        return obs, {}
 
-    def restart(self) -> dict:
+    def restart(self) -> tuple[dict, dict]:
         """
         Restarts the game, and all the history
 
-        :return: the observation from the first state
+        :return: the (attacker_obs, defender_obs) observation from the first state
         """
-        obs, info = self.reset()
+        obs, _ = self.reset()
         self.state.restart()
         return obs
 
@@ -575,9 +587,6 @@ class AttackerEnv(RansomGameEnv, ABC):
             save_dir=save_dir,
             initial_state_path=initial_state_path,
         )
-        self.observation_space = (
-            self.ransomgame_config.game_config.get_attacker_observation_space()
-        )
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
         attacker_action = action
@@ -617,9 +626,6 @@ class DefenderEnv(RansomGameEnv, ABC):
             ransomgame_config=ransomgame_config,
             save_dir=save_dir,
             initial_state_path=initial_state_path,
-        )
-        self.observation_space = (
-            self.ransomgame_config.game_config.get_defender_observation_space()
         )
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:

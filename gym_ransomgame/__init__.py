@@ -22,3 +22,9 @@ register(
     entry_point="gym_ransomgame.envs:RansomGameMinimalAttackV0Env",
     kwargs={"ransomgame_config": None, "save_dir": None, "initial_state_path": None},
 )
+
+register(
+    id="ransomgame-v0",
+    entry_point="gym_ransomgame.envs:RansomGameV0Env",
+    kwargs={"ransomgame_config": None, "save_dir": None, "initial_state_path": None},
+)

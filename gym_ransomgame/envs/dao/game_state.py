@@ -296,7 +296,6 @@ class GameState:
         for attr in [
             "attack_values",
             "defense_values",
-            "defense_det",
             "stages",
             "stage_time_spent",
             "percent_benign_completed",
@@ -304,10 +303,17 @@ class GameState:
         ]:
             setattr(new_state, attr, np.copy(getattr(self, attr)))
 
+        # defense_det is Optional, and np.copy(None) yields a 0-d object array rather
+        # than None, so it cannot go through the loop above.
+        new_state.defense_det = (
+            None if self.defense_det is None else np.copy(self.defense_det)
+        )
+
         for attr in [
             "exfiltration_level",
             "encryption_level",
             "global_detector_score",
+            "attacker_pos",
             "game_step",
             "attacker_cumulative_reward",
             "defender_cumulative_reward",
@@ -319,6 +325,10 @@ class GameState:
             "hacked",
             "np_random",
             "attack_successful",
+            # Set by set_state rather than by the constructor, and read by
+            # simulate_stage to recognize the TERMINATE action, so a copy that dropped
+            # it would silently stop honouring that action.
+            "num_attack_actions",
         ]:
             setattr(new_state, attr, getattr(self, attr))
 

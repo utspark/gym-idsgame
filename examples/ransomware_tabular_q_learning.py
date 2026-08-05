@@ -55,41 +55,55 @@ def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentCon
 def main() -> None:
     random_seed = 0
     load_q_table = False
-    attacker = False
+    attacker = True
+    defender = True
 
     create_artefact_dirs(SCRIPT_DIR, random_seed)
     config = make_config(SCRIPT_DIR, random_seed, attacker=attacker)
 
-    if attacker:
+    if attacker and not defender:
         env_name = "ransomgame-minimal_defense-v0"
         table_tag = "1784037638.6862357"
         q_table_filename = f"{table_tag}_attacker_q_table.npy"
-    else:
+    elif not attacker and defender:
         env_name = "ransomgame-minimal_attack-v0"
         table_tag = "1784755384.3270953"
         q_table_filename = f"{table_tag}_defender_q_table.npy"
+    elif attacker and defender:
+        pass
+    else:
+        raise ValueError("Must specify attacker or defender")
 
-    env = gym.make(env_name, save_dir=config.save_dir)
-    agent = RansomTabularQAgent(env.unwrapped, config)
+    if attacker != defender:
+        env = gym.make(env_name, save_dir=config.save_dir)
+        agent = RansomTabularQAgent(env.unwrapped, config)
 
-    if load_q_table and q_table_filename:
-        if attacker:
-            agent.Q_attacker = np.load(Path(agent.config.save_dir) / q_table_filename)
+        if load_q_table and q_table_filename:
+            if attacker:
+                agent.Q_attacker = np.load(
+                    Path(agent.config.save_dir) / q_table_filename
+                )
+            else:
+                agent.Q_defender = np.load(
+                    Path(agent.config.save_dir) / q_table_filename
+                )
         else:
-            agent.Q_defender = np.load(Path(agent.config.save_dir) / q_table_filename)
-    else:
-        agent.train()
+            agent.train()
 
-    train_result = agent.train_result
-    eval_result = agent.eval_result
+        train_result = agent.train_result
+        eval_result = agent.eval_result
 
-    if attacker:
-        table = agent.Q_attacker
-    else:
-        table = agent.Q_defender
+        if attacker:
+            table = agent.Q_attacker
+        else:
+            table = agent.Q_defender
 
-    for i in range(table.shape[0]):
-        print(table[i])
+        for i in range(table.shape[0]):
+            print(table[i])
+    elif attacker and defender:
+        env_name = "ransomgame-v0"
+        env = gym.make(env_name, save_dir=config.save_dir)
+        agent = RansomTabularQAgent(env.unwrapped, config)
 
 
 if __name__ == "__main__":

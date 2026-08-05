@@ -168,10 +168,12 @@ class RansomTabularQAgent(QAgent):
         """
         if not self._seeded:
             self._seeded = True
-            return self.env.reset(
+            obs, _ = self.env.reset(
                 seed=self.config.random_seed, update_stats=update_stats
             )
-        return self.env.reset(update_stats=update_stats)
+        else:
+            obs, _ = self.env.reset(update_stats=update_stats)
+        return obs
 
     # def get_state_id(self, observation: Any) -> int:
     #     """

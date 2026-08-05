@@ -4,6 +4,7 @@ from gym_ransomgame.envs.ransomgame_env import (
     DefenderEnv,
     RansomGameMinimalDefenseV0Env,
     RansomGameMinimalAttackV0Env,
+    RansomGameV0Env,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "DefenderEnv",
     "RansomGameMinimalDefenseV0Env",
     "RansomGameMinimalAttackV0Env",
+    "RansomGameV0Env",
 ]
