@@ -21,7 +21,9 @@ def create_artefact_dirs(output_dir: Path, random_seed: int) -> None:
         subdir.mkdir(parents=True, exist_ok=True)
 
 
-def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentConfig:
+def make_config(
+    output_dir: Path, random_seed: int, attacker: bool, defender: bool
+) -> QAgentConfig:
     results_dir = output_dir / "results"
     return QAgentConfig(
         gamma=0.999,
@@ -42,8 +44,11 @@ def make_config(output_dir: Path, random_seed: int, attacker: bool) -> QAgentCon
         gifs=True,
         gif_dir=str(results_dir / "gifs" / str(random_seed)),
         eval_frequency=300,
+        # These must match the env's game_config, or RansomTabularQAgent rejects the
+        # pair: they select which Q-tables update, while the env's copy selects which
+        # side the env drives with a bot.
         attacker=attacker,
-        defender=not attacker,
+        defender=defender,
         video_frequency=101,
         save_dir=str(results_dir / "data" / str(random_seed)),
         # Without this the seed only names the output dirs: the agent falls back to
@@ -59,7 +64,9 @@ def main() -> None:
     defender = True
 
     create_artefact_dirs(SCRIPT_DIR, random_seed)
-    config = make_config(SCRIPT_DIR, random_seed, attacker=attacker)
+    config = make_config(
+        SCRIPT_DIR, random_seed, attacker=attacker, defender=defender
+    )
 
     if attacker and not defender:
         env_name = "ransomgame-minimal_defense-v0"
@@ -104,6 +111,7 @@ def main() -> None:
         env_name = "ransomgame-v0"
         env = gym.make(env_name, save_dir=config.save_dir)
         agent = RansomTabularQAgent(env.unwrapped, config)
+        agent.train()
 
 
 if __name__ == "__main__":

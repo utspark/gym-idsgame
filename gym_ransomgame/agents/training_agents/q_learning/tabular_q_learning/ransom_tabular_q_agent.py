@@ -9,7 +9,6 @@ from gym_idsgame.agents.dao.experiment_result import ExperimentResult
 from gym_idsgame.agents.training_agents.q_learning.q_agent import QAgent
 from gym_idsgame.agents.training_agents.q_learning.q_agent_config import QAgentConfig
 from gym_ransomgame.envs import RansomGameEnv
-from gym_ransomgame.envs.dao.game_state import GameState
 
 
 class RansomTabularQAgent(QAgent):
@@ -23,6 +22,28 @@ class RansomTabularQAgent(QAgent):
         super().__init__(env, config)
 
         self.env: RansomGameEnv = env
+
+        # Who is learning is stated twice, on QAgentConfig and on the env's GameConfig,
+        # and the two drive different machinery: the config pair selects which Q-tables
+        # update, while the env pair selects the action spaces and decides whether the
+        # env substitutes a bot action for the one passed to step(). Disagreement is
+        # silent and produces a run that looks healthy but trains against the wrong
+        # opponent, so require them to match up front.
+        env_game_config = env.ransomgame_config.game_config
+        if (config.attacker, config.defender) != (
+            env_game_config.attacker,
+            env_game_config.defender,
+        ):
+            raise ValueError(
+                "QAgentConfig and the env disagree about who is external: config has "
+                "(attacker={}, defender={}) but {} has (attacker={}, defender={})".format(
+                    config.attacker,
+                    config.defender,
+                    type(env).__name__,
+                    env_game_config.attacker,
+                    env_game_config.defender,
+                )
+            )
 
         if config.tab_full_state_space:
             raise NotImplementedError(
@@ -253,13 +274,9 @@ class RansomTabularQAgent(QAgent):
 
         # Training
         for episode in range(self.config.num_episodes):
-            if self.config.attacker:
-                ransomware_episode = True
-                self.env.ransomgame_config.game_config.ransomware = ransomware_episode
-
-            else:
-                ransomware_episode = episode % 2 == 0
-                self.env.ransomgame_config.game_config.ransomware = ransomware_episode
+            # Nature's move belongs to the env, which drew it in the reset that ended the
+            # previous episode. Read it for the metric denominators; do not set it.
+            ransomware_episode = self.env.ransomgame_config.game_config.ransomware
 
             episode_attacker_reward = 0
             episode_defender_reward = 0
@@ -273,20 +290,12 @@ class RansomTabularQAgent(QAgent):
                         "Must specify whether training an attacker agent or defender agent"
                     )
 
-                # Default initialization
+                # Default initialization. Whichever side is internal, the env discards
+                # the placeholder below and substitutes its bot's action instead (see
+                # AttackerEnv/DefenderEnv.get_attacker_action/get_defender_action).
                 s_idx_a = 0
                 s_idx_d = 0
-                # Kill-chain attacker: advance to the lowest incomplete stage (0→1→2→3).
-                # Stage completion is probabilistic, so the number of steps per stage
-                # is stochastic. Benign episodes use IDLE throughout.
-                if ransomware_episode:
-                    stages = self.env.state.stages[0]
-                    attacker_action = next(
-                        (i for i, done_stage in enumerate(stages) if not done_stage),
-                        GameState.IDLE,
-                    )
-                else:
-                    attacker_action = GameState.IDLE
+                attacker_action = 0
                 defender_action = 0
 
                 # Get attacker and defender actions
@@ -544,8 +553,10 @@ class RansomTabularQAgent(QAgent):
         #     self.env.episode_frames.append(initial_frame)
 
         for episode in range(self.config.eval_episodes):
-            ransomware_episode = episode % 2 == 0
-            self.env.ransomgame_config.game_config.ransomware = ransomware_episode
+            # As in train(): the env drew this in the preceding reset. Eval used to
+            # alternate deterministically while train used its own rule, so the two
+            # measured the policy against different nature distributions.
+            ransomware_episode = self.env.ransomgame_config.game_config.ransomware
 
             episode_attacker_reward = 0
             episode_defender_reward = 0
@@ -572,20 +583,11 @@ class RansomTabularQAgent(QAgent):
                     self.env.render()
                     time.sleep(self.config.eval_sleep)
 
-                # Default initialization
-                # Kill-chain attacker: advance to the lowest incomplete stage (0→1→2→3).
-                # Stage completion is probabilistic, so the number of steps per stage
-                # is stochastic. Benign episodes use IDLE throughout.
-                stages = self.env.state.stages[0]
+                # Default initialization. Whichever side is internal, the env discards
+                # the placeholder below and substitutes its bot's action instead (see
+                # AttackerEnv/DefenderEnv.get_attacker_action/get_defender_action).
+                attacker_action = 0
                 defender_action = 0
-
-                if ransomware_episode:
-                    attacker_action = next(
-                        (i for i, done_stage in enumerate(stages) if not done_stage),
-                        GameState.IDLE,
-                    )
-                else:
-                    attacker_action = GameState.IDLE
 
                 # Get attacker and defender actions
                 if self.config.attacker:

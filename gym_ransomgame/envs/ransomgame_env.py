@@ -13,29 +13,19 @@ from abc import ABC, abstractmethod
 from numpy import ndarray
 
 from gym_idsgame.envs.constants import constants
-from gym_idsgame.agents.agent import Agent
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.dao import ransomgame_config
 from gym_ransomgame.envs.rendering.viewer import Viewer
 
-from gym_idsgame.agents.bot_agents.bot_agent import BotAgent
-
-
-class DummyAgent(BotAgent):
-
-    def __init__(self, game_config):
-        super(DummyAgent, self).__init__(game_config)
-
-    def action(self, state):
-        return 0
-
-
+from gym_ransomgame.agents.bot_agents.kill_chain_attacker_bot_agent import (
+    KillChainAttackerBotAgent,
+)
+from gym_ransomgame.agents.bot_agents.threshold_defender_bot_agent import (
+    ThresholdDefenderBotAgent,
+)
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_ransomgame.envs.dao.game_state import GameState
 from gym_ransomgame.envs.dao.ransomgame_config import RansomGameConfig
-from gym_idsgame.agents.bot_agents.defend_minimal_value_bot_agent import (
-    DefendMinimalValueBotAgent,
-)
 import gym_ransomgame.envs.util.ransomgame_util as util
 
 
@@ -189,7 +179,10 @@ class RansomGameEnv(gym.Env, ABC):
         # Initialization
         trajectory: List[Any] = [self.state]
         reward: Tuple[float, float] = (-0.1, float(0.1))
-        info = {"detected": False}
+        info = {
+            "detected": False,
+            "ransomware": self.ransomgame_config.game_config.ransomware,
+        }
 
         if self.state.game_step > constants.GAME_CONFIG.MAX_GAME_STEPS:
             obs = self.get_observation()
@@ -294,7 +287,8 @@ class RansomGameEnv(gym.Env, ABC):
         :param seed: random seed
         :param options: options for resetting
         :param update_stats: whether the game count should be incremented or not
-        :return: ((attacker_obs, defender_obs), info)
+        :return: ((attacker_obs, defender_obs), info), where info["ransomware"] is the
+                 episode type nature drew for the episode that is about to start
         """
         super().reset(seed=seed)
         self.action_space._np_random = self.np_random
@@ -304,6 +298,20 @@ class RansomGameEnv(gym.Env, ABC):
             self.ransomgame_config.attacker_agent.np_random = self.np_random
         if self.ransomgame_config.defender_agent is not None:
             self.ransomgame_config.defender_agent.np_random = self.np_random
+
+        # Nature's move. Drawing it here rather than in the training loop keeps the
+        # episode type on the seeded env stream, makes _terminal_reward independent of
+        # whoever is driving the env, and gives train and eval one shared definition.
+        # A degenerate probability skips the draw so that an env pinned to one episode
+        # type consumes no entropy and its episode stream is unaffected.
+        p = self.ransomgame_config.ransomware_p
+        if 0.0 < p < 1.0:
+            self.ransomgame_config.game_config.ransomware = bool(
+                self.np_random.random() < p
+            )
+        else:
+            self.ransomgame_config.game_config.ransomware = p >= 1.0
+
         self.past_moves = []
         self.past_positions = []
         self.failed_attacks = {}
@@ -327,7 +335,8 @@ class RansomGameEnv(gym.Env, ABC):
         self.defenses = []
         self.attacks = []
         self.num_failed_attacks = 0
-        return obs, {}
+        info = {"ransomware": self.ransomgame_config.game_config.ransomware}
+        return obs, info
 
     def restart(self) -> tuple[dict, dict]:
         """
@@ -589,12 +598,24 @@ class AttackerEnv(RansomGameEnv, ABC):
         )
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
+        """
+        The attacker is external, so its action is whatever the caller passed.
+
+        :param action: the attacker action supplied to step()
+        :return: the attacker action
+        """
         attacker_action = action
         return attacker_action
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
-        defender_action = action
-        return defender_action
+        """
+        The defender is part of the environment, so the action supplied to step() is
+        discarded and the defender bot is consulted instead.
+
+        :param action: the defender action supplied to step() (ignored)
+        :return: the defender bot's action
+        """
+        return self.ransomgame_config.defender_agent.action(self.state)
 
 
 class DefenderEnv(RansomGameEnv, ABC):
@@ -621,7 +642,7 @@ class DefenderEnv(RansomGameEnv, ABC):
         if ransomgame_config is None:
             raise ValueError("Cannot instantiate env without configuration")
         if ransomgame_config.attacker_agent is None:
-            raise ValueError("Cannot instantiate attacker-env without a attacker agent")
+            raise ValueError("Cannot instantiate defender-env without an attacker agent")
         super().__init__(
             ransomgame_config=ransomgame_config,
             save_dir=save_dir,
@@ -629,10 +650,22 @@ class DefenderEnv(RansomGameEnv, ABC):
         )
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
-        attacker_action = action
-        return attacker_action
+        """
+        The attacker is part of the environment, so the action supplied to step() is
+        discarded and the attacker bot is consulted instead.
+
+        :param action: the attacker action supplied to step() (ignored)
+        :return: the attacker bot's action
+        """
+        return self.ransomgame_config.attacker_agent.action(self.state)
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
+        """
+        The defender is external, so its action is whatever the caller passed.
+
+        :param action: the defender action supplied to step()
+        :return: the defender action
+        """
         defender_action = action
         return defender_action
 
@@ -666,10 +699,22 @@ class AttackDefenseEnv(RansomGameEnv, ABC):
         )
 
     def get_defender_action(self, action) -> Union[Union[int, int], int, int]:
+        """
+        Both agents are external, so the action is whatever the caller passed.
+
+        :param action: the defender action supplied to step()
+        :return: the defender action
+        """
         defender_action = action
         return defender_action
 
     def get_attacker_action(self, action) -> Union[int, Union[int, int], int]:
+        """
+        Both agents are external, so the action is whatever the caller passed.
+
+        :param action: the attacker action supplied to step()
+        :return: the attacker action
+        """
         attacker_action = action
         return attacker_action
 
@@ -711,12 +756,15 @@ class RansomGameMinimalDefenseV0Env(AttackerEnv):
             game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
-            defender_agent = DummyAgent(game_config)
+            defender_agent = ThresholdDefenderBotAgent(game_config)
             ransomgame_config = RansomGameConfig(
                 game_config=game_config,
                 defender_agent=defender_agent,
                 initial_state_path=None,
                 render_config=RenderConfig(),
+                # Every episode is a ransomware episode: there is no benign traffic for
+                # the attacker to hide in, and nothing here rewards it for abstaining.
+                ransomware_p=1.0,
             )
             ransomgame_config.render_config.caption = "ransomgame-minimal_defense-v0"
         super().__init__(
@@ -754,12 +802,16 @@ class RansomGameMinimalAttackV0Env(DefenderEnv):
             game_config.set_initial_state(defense_val=2, attack_val=0)
             if initial_state_path is not None:
                 game_config.set_load_initial_state(initial_state_path)
-            attacker_agent = DummyAgent(game_config)
+            attacker_agent = KillChainAttackerBotAgent(game_config)
             ransomgame_config = RansomGameConfig(
                 game_config=game_config,
                 attacker_agent=attacker_agent,
                 initial_state_path=None,
                 render_config=RenderConfig(),
+                # Half the episodes are benign, so the defender faces a real
+                # signal-detection problem rather than a dominant alarm-immediately
+                # policy. The bot attacker idles for the whole of a benign episode.
+                ransomware_p=0.5,
             )
             ransomgame_config.render_config.caption = "ransomgame-minimal_attack-v0"
         super().__init__(
@@ -807,6 +859,12 @@ class RansomGameV0Env(AttackDefenseEnv):
                 game_config=game_config,
                 initial_state_path=None,
                 render_config=RenderConfig(),
+                # Pinned to all-ransomware for now. The external attacker cannot tell a
+                # benign episode from a ransomware one (its observation carries no
+                # episode type) and nothing forces it to idle, so benign episodes here
+                # would only feed _terminal_reward's false-positive branch nonsense.
+                # Lower this to 0.5 once the attacker observes its own type.
+                ransomware_p=1.0,
             )
             ransomgame_config.render_config.caption = "ransomgame-v0"
         super().__init__(

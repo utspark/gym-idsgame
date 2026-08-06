@@ -23,6 +23,7 @@ class RansomGameConfig:
         save_trajectories: bool = False,
         save_attack_stats: bool = False,
         randomize_env: bool = False,
+        ransomware_p: float = 0.5,
         local_view_observations: bool = False,
         # reconnaissance_actions : bool = False,
         # randomize_starting_position : bool = False,
@@ -42,6 +43,9 @@ class RansomGameConfig:
         :param initial_state_path: path to the initial state
         :param save_attack_stats: boolean flag whether to save attack statistics or not
         :param randomize_env: boolean flag whether to randomize the environment creation before each episode
+        :param ransomware_p: probability that reset() makes the next episode a ransomware
+                             episode rather than a benign one. 1.0 or 0.0 pins the episode
+                             type and skips the draw entirely.
         :param local_view_observations: boolean flag whether features are provided in a "local view" mode
         :param randomize_visibility: whether to randomize visibilty during training (for partailly observed envs only)
         :param visibility_p: when randomizing visibility, set to visible with this probability
@@ -59,6 +63,9 @@ class RansomGameConfig:
         self.save_trajectories = save_trajectories
         self.save_attack_stats = save_attack_stats
         self.randomize_env = randomize_env
+        if not 0.0 <= ransomware_p <= 1.0:
+            raise ValueError("ransomware_p must be in [0, 1], got {}".format(ransomware_p))
+        self.ransomware_p = ransomware_p
         self.local_view_observations = local_view_observations
         # self.reconnaissance_actions = reconnaissance_actions
         # self.randomize_starting_position = randomize_starting_position
