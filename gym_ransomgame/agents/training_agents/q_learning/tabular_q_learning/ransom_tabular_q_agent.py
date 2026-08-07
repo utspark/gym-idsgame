@@ -458,7 +458,12 @@ class RansomTabularQAgent(QAgent):
         attacker_obs_prime, defender_obs_prime = obs_prime
         attacker_action, defender_action = action
 
-        if self.config.attacker:
+        # A benign episode is not the attacker's episode: the env threw its action away
+        # and played benign traffic instead, and the attacker reward that comes back is
+        # the benign agent's (a step penalty, then -100 at the step cap). Crediting the
+        # attacker's table with it would train it on a transition it never took, in the
+        # very states a ransomware episode starts from.
+        if self.config.attacker and self.env.ransomgame_config.game_config.ransomware:
             s_prime_idx = self._resolve_state_idx(
                 attacker_obs_prime, defender_obs_prime
             )

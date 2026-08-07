@@ -198,8 +198,15 @@ class RansomGameEnv(gym.Env, ABC):
 
         attack_action, defense_action = action
 
-        # 1. Interpret attacker action
-        attack_action = self.get_attacker_action(attack_action)
+        # 1. Interpret attacker action. On a benign episode there is no ransomware
+        # operator, so the env plays benign traffic in place of whoever would otherwise
+        # act -- the external agent in a two-player game, or the attacker bot in a
+        # defender-only one. Keeping the substitution here makes this the only place
+        # benign behaviour is defined and leaves the attacker policies pure.
+        if self.ransomgame_config.game_config.ransomware:
+            attack_action = self.get_attacker_action(attack_action)
+        else:
+            attack_action = self.ransomgame_config.benign_agent.action(self.state)
         trajectory.append([attack_action])
 
         # 2. Interpret defense action
@@ -859,12 +866,10 @@ class RansomGameV0Env(AttackDefenseEnv):
                 game_config=game_config,
                 initial_state_path=None,
                 render_config=RenderConfig(),
-                # Pinned to all-ransomware for now. The external attacker cannot tell a
-                # benign episode from a ransomware one (its observation carries no
-                # episode type) and nothing forces it to idle, so benign episodes here
-                # would only feed _terminal_reward's false-positive branch nonsense.
-                # Lower this to 0.5 once the attacker observes its own type.
-                ransomware_p=1.0,
+                # Half the episodes are benign, on which the env plays benign_agent
+                # instead of the external attacker. Without them the defender faces no
+                # false-positive risk and alarming on the first step strictly dominates.
+                ransomware_p=0.5,
             )
             ransomgame_config.render_config.caption = "ransomgame-v0"
         super().__init__(

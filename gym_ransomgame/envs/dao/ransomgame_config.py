@@ -4,6 +4,7 @@ Configuration for the ransomgame environment
 
 from typing import Optional
 from gym_idsgame.envs.dao.render_config import RenderConfig
+from gym_ransomgame.agents.bot_agents.benign_bot_agent import BenignBotAgent
 from gym_ransomgame.envs.dao.game_config import GameConfig
 from gym_idsgame.agents.agent import Agent
 
@@ -19,6 +20,7 @@ class RansomGameConfig:
         game_config: GameConfig,
         defender_agent: Optional[Agent] = None,
         attacker_agent: Optional[Agent] = None,
+        benign_agent: Optional[Agent] = None,
         initial_state_path: Optional[str] = None,
         save_trajectories: bool = False,
         save_attack_stats: bool = False,
@@ -40,6 +42,10 @@ class RansomGameConfig:
         :param game_config: game configuration, e.g. number of nodes
         :param defender_agent: the defender agent
         :param attacker_agent: the attacker agent
+        :param benign_agent: the agent the env plays in place of the attacker on benign
+                             episodes. Defaults to BenignBotAgent, since there is exactly
+                             one sensible do-nothing policy and defaulting it means
+                             raising ransomware_p above 0 never needs extra wiring.
         :param initial_state_path: path to the initial state
         :param save_attack_stats: boolean flag whether to save attack statistics or not
         :param randomize_env: boolean flag whether to randomize the environment creation before each episode
@@ -54,6 +60,9 @@ class RansomGameConfig:
         self.game_config = game_config
         self.defender_agent = defender_agent
         self.attacker_agent = attacker_agent
+        self.benign_agent = (
+            benign_agent if benign_agent is not None else BenignBotAgent(game_config)
+        )
         if self.render_config is None:
             self.render_config = RenderConfig()
         # if self.game_config is None:
