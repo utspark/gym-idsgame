@@ -55,7 +55,7 @@ def run_local_detector(
     raise ValueError(f"Unknown problem formulation: {formulation}")
 
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data"
+DATA_PATH = Path(__file__).resolve().parents[1] / "data"
 
 
 def get_default_config():

@@ -95,7 +95,7 @@ def run_global_detector(
         print(f"{proba: 6.5f}")
         results.append(proba)
 
-    DATA_PATH = Path(__file__).resolve().parents[2] / "data"
+    DATA_PATH = Path(__file__).resolve().parents[1] / "data"
     model_dir = DATA_PATH / "models/local_detector_analysis"
 
     problem_formulation = "multiclass_supervised"
