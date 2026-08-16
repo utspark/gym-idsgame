@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import gymnasium as gym
+import joblib
 import numpy as np
 
 from typing import Union, Any, Literal, Optional, List, Tuple
@@ -12,6 +13,8 @@ from abc import ABC, abstractmethod
 
 from numpy import ndarray
 
+from detector_framework.cross_layer import cross_layer_train_run as cld
+from detector_framework.global_detector import global_detector
 from gym_idsgame.envs.constants import constants
 from gym_idsgame.envs.dao.render_config import RenderConfig
 from gym_ransomgame.envs.dao import ransomgame_config
@@ -156,6 +159,68 @@ class RansomGameEnv(gym.Env, ABC):
         self.attacks = []
         self.num_failed_attacks = 0
         self.failed_attacks = {}
+        MODEL_DIR = (
+            Path(__file__).resolve().parents[1] / "detector_framework/data/models"
+        )
+        model_paths = {
+            "syscall_clf_path": MODEL_DIR / "syscall_clf.joblib",
+            "network_clf_path": MODEL_DIR / "network_clf.joblib",
+            "hpc_clf_path": MODEL_DIR / "hpc_clf.joblib",
+        }
+        la_components = {
+            "density": True,
+            "propagation": True,
+        }
+        self.gd = global_detector.LifecycleDetector(
+            **model_paths, lifecycle_awareness=True, stage_filter=False, **la_components
+        )
+        # Loaded once and held for the environment's lifetime rather than per-step,
+        # since it's a static resource shared across all episodes/steps.
+        FEATURE_FRAMES_PATH = (
+            Path(__file__).resolve().parents[1]
+            / "data/trace_data/feature_frames.joblib"
+        )
+        self.feature_frames = joblib.load(FEATURE_FRAMES_PATH)
+
+    def _update_detector_score(self, attack_type: int) -> None:
+        """
+        Scores a synthetic trace window for the given attack stage against the global
+        lifecycle detector and records the result on the state.
+
+        :param attack_type: the attack stage just executed this step
+        :return: None
+        """
+        WINDOW_SIZE_TIME = 0.7
+        WINDOW_STRIDE_TIME = 0.1
+
+        stage_lens = self.state.sample_detector_stage_lens(attack_type)
+        if stage_lens is None:
+            return
+
+        tmp_cross_layer_X = cld.build_cross_layer_X(
+            self.feature_frames,
+            stage_lens,
+            WINDOW_SIZE_TIME,
+            WINDOW_STRIDE_TIME,
+        )
+
+        if len(self.state.cross_layer_X) > 0:
+            self.state.cross_layer_X = tuple(
+                np.concatenate((old, tmp), axis=0)
+                for old, tmp in zip(self.state.cross_layer_X, tmp_cross_layer_X)
+            )
+
+            # self.state.cross_layer_X = np.concatenate(
+            #     (self.state.cross_layer_X, tmp_cross_layer_X), axis=0
+            # )
+
+        else:
+            self.state.cross_layer_X = tmp_cross_layer_X
+
+        self.state.global_detector_score = self.gd.score_cross_layer(
+            self.state.cross_layer_X
+            # tmp_cross_layer_X
+        )
 
     # -------- API ------------
     def step(
@@ -229,6 +294,8 @@ class RansomGameEnv(gym.Env, ABC):
             attack_type=attack_action, exponential=True
         )
         reward = (attacker_reward, reward[1])
+
+        self._update_detector_score(attack_action)
 
         if self.ransomgame_config.save_attack_stats:
             self.total_attacks.append([attack_action, self.state.attack_successful])
@@ -649,7 +716,9 @@ class DefenderEnv(RansomGameEnv, ABC):
         if ransomgame_config is None:
             raise ValueError("Cannot instantiate env without configuration")
         if ransomgame_config.attacker_agent is None:
-            raise ValueError("Cannot instantiate defender-env without an attacker agent")
+            raise ValueError(
+                "Cannot instantiate defender-env without an attacker agent"
+            )
         super().__init__(
             ransomgame_config=ransomgame_config,
             save_dir=save_dir,

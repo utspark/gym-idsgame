@@ -4,6 +4,7 @@ Stateful data of the gym-ransomgame environment
 
 from typing import List, Optional, Tuple, Dict
 from types import MappingProxyType
+
 import numpy as np
 import pickle
 from itertools import groupby
@@ -107,15 +108,16 @@ class GameState:
         :param num_hacks: number of wins for the attacker
         :param hacked: True if the attacker hacked the data node otherwise False
         """
+        self.non_attacks = 2
         self.attack_successful = False
         self.stages = np.zeros((1, 4), dtype=int)
         self.stage_time_spent = np.zeros((1, 4), dtype=int)
-        # completion bars, 0..N_PROGRESS_STEPS
         self.exfiltration_level: int = 0
         self.encryption_level: int = 0
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
         self.global_detector_score: float = 0.0
+        self.cross_layer_X = []
 
         self.attack_values: np.ndarray = (
             attack_values if attack_values is not None else np.zeros((1, 1))
@@ -409,6 +411,34 @@ class GameState:
             p_base, p_progress, self.get_consecutive_attack_attempts(attack_type)
         )
 
+    # Behavior traces used as detector-scoring proxies for each attack stage. Keys not
+    # present here (e.g. RECONNAISSANCE, IDLE, TERMINATE) have no detector sample.
+    DETECTOR_STAGE_BEHAVIORS = MappingProxyType(
+        {
+            EXFILTRATION: "browser_compute",
+            ENCRYPTION: "recon_mount",
+        }
+    )
+    DETECTOR_DURATION_CHOICES = (1, 2, 3)
+
+    def sample_detector_stage_lens(
+        self, attack_type: int
+    ) -> Optional[List[Tuple[str, int]]]:
+        """
+        Builds a synthetic (behavior, duration) sample describing the given attack
+        stage, for scoring against the global lifecycle detector. Uses the state's own
+        RNG so the sample stays reproducible from the episode seed.
+
+        :param attack_type: the attack stage to build a sample for
+        :return: a single-element (behavior, duration) list, or None if `attack_type`
+            has no detector-behavior mapping
+        """
+        behavior = self.DETECTOR_STAGE_BEHAVIORS.get(attack_type)
+        if behavior is None:
+            return None
+        duration = self.np_random.choice(self.DETECTOR_DURATION_CHOICES)
+        return [(behavior, duration)]
+
     def simulate_stage(self, attack_type: int, exponential: bool = True) -> float:
         """
         Generic helper to simulate any attack type.
@@ -418,21 +448,23 @@ class GameState:
 
         assert self.np_random is not None
 
+        # no reward for benign, idle, or self-termination
+        if attack_type < self.non_attacks:
+            # if attacker terminates
+            if attack_type == 0:
+                self.done = True
+            return reward
+
+        # TODO translate attack into stage
+        # penalize staying in completed stages
+        if self.stages[0, attack_type] == 1:
+            return reward
+
+        # TODO translate attack into stage
         if attack_type < self.stage_time_spent.shape[1]:
             self.stage_time_spent[0, attack_type] = (
                 self.get_consecutive_attack_attempts(attack_type)
             )
-
-        # no reward for benign, idle, or self-termination
-        if attack_type >= self.stages.shape[1]:
-            # if attacker terminates
-            if attack_type == self.num_attack_actions - 1:
-                self.done = True
-            return reward
-
-        # penalize staying in completed stages
-        if self.stages[0, attack_type] == 1:
-            return reward
 
         reward += self.PROGRESS_REWARD
 

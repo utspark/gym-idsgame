@@ -56,7 +56,7 @@ class GameConfig:
         self.defender = defender
         self.num_attack_types = num_attack_types
         self.max_value = max_value
-        self.num_attack_actions = 6
+        self.num_attack_actions = 4  # 6
         self.num_defense_actions = 2
         self.num_states = 1
         # self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)
@@ -88,7 +88,7 @@ class GameConfig:
         percent_benign_completed: float = 0,
         local_detector_scores: Optional[np.ndarray] = None,
         global_detector_score: float = 0,
-        **kwargs
+        **kwargs,
     ):
         """
         Utility function for setting the initial game state
@@ -140,6 +140,7 @@ class GameConfig:
         observation_space = gym.spaces.Dict(
             {
                 "encryption_level": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
+                "global_detector_score": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
             }
         )
         return observation_space

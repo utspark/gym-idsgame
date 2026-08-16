@@ -61,12 +61,10 @@ def main() -> None:
     random_seed = 0
     load_q_table = False
     attacker = True
-    defender = True
+    defender = False
 
     create_artefact_dirs(SCRIPT_DIR, random_seed)
-    config = make_config(
-        SCRIPT_DIR, random_seed, attacker=attacker, defender=defender
-    )
+    config = make_config(SCRIPT_DIR, random_seed, attacker=attacker, defender=defender)
 
     if attacker and not defender:
         env_name = "ransomgame-minimal_defense-v0"

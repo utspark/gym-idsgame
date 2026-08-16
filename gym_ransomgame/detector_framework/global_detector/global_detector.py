@@ -16,7 +16,9 @@ class LifecycleDetector:
     DEFAULT_PROBA_THRESHOLD: Final[float] = 0.95
 
     @staticmethod
-    def form_lifecycle_sequence(attack_stages: Dict[str, List[str]], benign: bool = False) -> Tuple[List[str], List[int]]:
+    def form_lifecycle_sequence(
+        attack_stages: Dict[str, List[str]], benign: bool = False
+    ) -> Tuple[List[str], List[int]]:
         # TODO benign sequences
         # TODO consider benign states
         #  - (states: list)
@@ -41,17 +43,18 @@ class LifecycleDetector:
 
         return stage_keys, stage_windows
 
-    def __init__(self,
-                 syscall_clf_path: Optional[str] = None,
-                 network_clf_path: Optional[str] = None,
-                 hpc_clf_path: Optional[str] = None,
-                 lifecycle_awareness: bool = True,
-                 stage_filter: bool = False,
-                 density: bool = False,
-                 propagation: bool = False,
-                 memory: bool = False,
-                 proba_threshold: float = DEFAULT_PROBA_THRESHOLD
-                 ):
+    def __init__(
+        self,
+        syscall_clf_path: Optional[str] = None,
+        network_clf_path: Optional[str] = None,
+        hpc_clf_path: Optional[str] = None,
+        lifecycle_awareness: bool = True,
+        stage_filter: bool = False,
+        density: bool = False,
+        propagation: bool = False,
+        memory: bool = False,
+        proba_threshold: float = DEFAULT_PROBA_THRESHOLD,
+    ):
         if not any([syscall_clf_path, network_clf_path, hpc_clf_path]):
             raise ValueError("At least one classifier path must be provided.")
 
@@ -84,7 +87,9 @@ class LifecycleDetector:
         # Probabilities for starting at each stage
         # Favoring starting at earlier stages
         alternate_start_weights = [i for i in range(1, 5)][::-1]
-        start_matrix = np.array(alternate_start_weights) / np.sum(alternate_start_weights)
+        start_matrix = np.array(alternate_start_weights) / np.sum(
+            alternate_start_weights
+        )
 
         # Transition probabilities
         f_b_ratio = 2  # ratio of forward over backward transition confidence
@@ -114,7 +119,9 @@ class LifecycleDetector:
 
         return model
 
-    def cross_layer_class_preds(self, cross_layer_X: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    def cross_layer_class_preds(
+        self, cross_layer_X: Tuple[np.ndarray, np.ndarray, np.ndarray]
+    ) -> Tuple[np.ndarray, np.ndarray]:
         cross_layer_classes = []
         cross_layer_probas = []
 
@@ -157,7 +164,7 @@ class LifecycleDetector:
             return np.array([]), np.array([])
 
         new_sequence = np.array(new_sequence)
-        
+
         if self.stage_filter:
             # Filter out entries where the length is less than the threshold
             mask = new_sequence[:, 1].astype(int) >= self.DEFAULT_UNIFORM_SUBSEQ_LEN
@@ -187,7 +194,6 @@ class LifecycleDetector:
 
         return np.array(results)
 
-
     @staticmethod
     def _longest_increasing_subsequence(nums: List[int]) -> Tuple[List[int], List[int]]:
         """Returns the longest increasing subsequence and its indices."""
@@ -216,15 +222,19 @@ class LifecycleDetector:
         while k != -1:
             lis_idx.append(k)
             k = prev[k]
-        
+
         lis_idx.reverse()
         return [nums[i] for i in lis_idx], lis_idx
 
-    def score_stage_sequence(self, stage_sequence: np.ndarray, clf_predictions: np.ndarray) -> float:
+    def score_stage_sequence(
+        self, stage_sequence: np.ndarray, clf_predictions: np.ndarray
+    ) -> float:
         score = 0.0
 
         if self.density:
-            density_penalty = (len(stage_sequence) / len(clf_predictions)) * self.DEFAULT_DENSITY_SCALER
+            density_penalty = (
+                len(stage_sequence) / len(clf_predictions)
+            ) * self.DEFAULT_DENSITY_SCALER
             if self.lifecycle_awareness:
                 density_penalty *= 1 / (1 + np.exp(-len(clf_predictions) / 100))
             score += density_penalty
@@ -250,27 +260,33 @@ class LifecycleDetector:
             #   stage_duration_penalty = 1 / (1 + np.exp(-1 * .0001 * stage_duration_penalty)) * 0.2
             #   proba += stage_duration_penalty
 
-            hmm_score = np.exp(self.hmm.score(np.array(stage_seq_filtered).reshape(-1, 1)))
+            hmm_score = np.exp(
+                self.hmm.score(np.array(stage_seq_filtered).reshape(-1, 1))
+            )
             # Normalization by length
             hmm_score = np.power(hmm_score, 1 / len(stage_seq_filtered))
             score += hmm_score
 
         return score
 
-    def score_cross_layer(self, cross_layer_X: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> float:
+    def score_cross_layer(
+        self, cross_layer_X: Tuple[np.ndarray, np.ndarray, np.ndarray]
+    ) -> float:
         """Calculates a global detection score across multiple data layers."""
         clf_predictions, clf_probas = self.cross_layer_class_preds(cross_layer_X)
         collated_predictions = self._collate_preds(clf_predictions, clf_probas)
 
         return self.score_stage_sequence(collated_predictions, clf_predictions)
 
-    def score_single_layer(self, trace_classes: np.ndarray, trace_values: np.ndarray, translation: Dict[int, int]) -> float:
+    def score_single_layer(
+        self,
+        trace_classes: np.ndarray,
+        trace_values: np.ndarray,
+        translation: Dict[int, int],
+    ) -> float:
         """Calculates a global detection score for a single layer of data."""
         vectorized_translate = np.vectorize(lambda x: translation.get(x, x))
         clf_predictions = vectorized_translate(trace_classes)
         predictions = clf_predictions[trace_values >= self.proba_threshold]
 
         return self.score_stage_sequence(predictions, clf_predictions)
-
-
-
