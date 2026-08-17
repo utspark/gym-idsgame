@@ -210,10 +210,6 @@ class RansomGameEnv(gym.Env, ABC):
                 for old, tmp in zip(self.state.cross_layer_X, tmp_cross_layer_X)
             )
 
-            # self.state.cross_layer_X = np.concatenate(
-            #     (self.state.cross_layer_X, tmp_cross_layer_X), axis=0
-            # )
-
         else:
             self.state.cross_layer_X = tmp_cross_layer_X
 
