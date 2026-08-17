@@ -87,7 +87,7 @@ class GameConfig:
         encryption_level: int = 0,
         percent_benign_completed: float = 0,
         local_detector_scores: Optional[np.ndarray] = None,
-        global_detector_score: float = 0,
+        global_detector_score: int = 0,
         **kwargs,
     ):
         """

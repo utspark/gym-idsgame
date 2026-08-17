@@ -91,7 +91,7 @@ class RansomGameEnv(gym.Env, ABC):
             encryption_level=0,
             percent_benign_completed=np.zeros((1, 4), dtype=bool),
             local_detector_scores=np.zeros((1, 4)),
-            global_detector_score=0.0,
+            global_detector_score=0,
             num_attack_actions=game_config.num_attack_actions,
         )
         # Copy rather than alias: reset() passes game_config.initial_state to
@@ -213,9 +213,11 @@ class RansomGameEnv(gym.Env, ABC):
         else:
             self.state.cross_layer_X = tmp_cross_layer_X
 
-        self.state.global_detector_score = self.gd.score_cross_layer(
-            self.state.cross_layer_X
-            # tmp_cross_layer_X
+        self.state.advance_global_detector_score(
+            self.gd.score_cross_layer(
+                self.state.cross_layer_X
+                # tmp_cross_layer_X
+            )
         )
 
     # -------- API ------------

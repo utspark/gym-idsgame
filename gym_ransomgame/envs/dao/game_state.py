@@ -39,6 +39,10 @@ class GameState:
     # [0, 1]. Excludes 0 so that zero progress leaves the bar empty.
     CONSECUTIVE_PROGRESS_TRIPS = np.linspace(0, 1, N_PROGRESS_STEPS + 1)[1:]
 
+    # Trip points for the global detector score bar, keyed on the raw detector score in
+    # its theoretical range [0, 1]. Excludes 0 so that a zero score leaves the bar empty.
+    DETECTOR_SCORE_TRIPS = np.linspace(0.01, 0.701, N_PROGRESS_STEPS)[1:]
+
     # Reward Constants
     DEFAULT_ATTACK_REWARD = -0.1
     DEFAULT_DEFENSE_REWARD = 0.1
@@ -116,7 +120,7 @@ class GameState:
         self.encryption_level: int = 0
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores: np.ndarray = np.zeros((1, 4))
-        self.global_detector_score: float = 0.0
+        self.global_detector_score: int = 0
         self.cross_layer_X = []
 
         self.attack_values: np.ndarray = (
@@ -174,7 +178,7 @@ class GameState:
             encryption_level=0,
             percent_benign_completed=np.zeros((1, 4)),
             local_detector_scores=np.zeros((1, 4)),
-            global_detector_score=0.0,
+            global_detector_score=0,
         )
         # self.defense_det = np.zeros((num_rows * num_cols, num_attack_types))
         # self.defense_values = np.zeros((num_rows * num_cols, num_attack_types))
@@ -202,7 +206,7 @@ class GameState:
         encryption_level: int = 0,
         percent_benign_completed=None,
         local_detector_scores: Optional[np.ndarray] = None,
-        global_detector_score: float = 0.0,
+        global_detector_score: int = 0,
         num_attack_actions: int = 0,
     ):
         """
@@ -213,7 +217,7 @@ class GameState:
         :param encryption_level: encryption progress bar level, 0..N_PROGRESS_STEPS
         :param percent_benign_completed: percent benign completed as progress bar
         :param local_detector_scores: local detector scores
-        :param global_detector_score: global detector score
+        :param global_detector_score: global detector score progress bar level, 0..N_PROGRESS_STEPS
         :param num_attack_actions: number of possible attack actions taken
         :return: None
         """
@@ -230,7 +234,7 @@ class GameState:
             if local_detector_scores is not None
             else np.zeros((1, 4))
         )
-        self.global_detector_score = global_detector_score
+        self.global_detector_score = int(global_detector_score)
         self.num_attack_actions = num_attack_actions
 
     def new_game(
@@ -275,7 +279,7 @@ class GameState:
         self.encryption_level = 0
         self.percent_benign_completed = np.zeros((1, 4), dtype=bool)
         self.local_detector_scores = np.zeros((1, 4))
-        self.global_detector_score = 0.0
+        self.global_detector_score = 0
         if np_random is not None:
             self.np_random = np_random
 
@@ -385,6 +389,19 @@ class GameState:
         """
         reached = int(np.searchsorted(trips, value, side="right"))
         return max(level, reached)
+
+    def advance_global_detector_score(self, score: float) -> None:
+        """
+        Advances the global detector score progress bar to the level implied by
+        `score`, using the same monotonic (never-decreasing) bar semantics as
+        `exfiltration_level`/`encryption_level`.
+
+        :param score: raw global detector score, in its theoretical range [0, 1]
+        :return: None
+        """
+        self.global_detector_score = self._advanced_progress_level(
+            self.global_detector_score, score, self.DETECTOR_SCORE_TRIPS
+        )
 
     def get_consecutive_attack_attempts(self, attack_type: int) -> int:
         history_len = 10
@@ -608,7 +625,7 @@ class GameState:
             # "stages": self.stages.flatten().astype(int),
             "encryption_level": int(self.encryption_level),
             # "local_detector_scores": self.local_detector_scores.astype(np.float32),
-            # "global_detector_score": np.array([self.global_detector_score], dtype=np.float32)
+            "global_detector_score": int(self.global_detector_score),
         }
 
         return defender_observation
