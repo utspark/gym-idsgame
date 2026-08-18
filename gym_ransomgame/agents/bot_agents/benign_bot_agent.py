@@ -19,8 +19,10 @@ class BenignBotAgent(BotAgent):
     touches files and moves data would drive the detector scores that currently sit
     unused on GameState, which is what makes the defender's problem non-trivial.
 
-    For now it idles, so a benign episode leaves every stage and progress bar at zero
-    and runs until the step cap.
+    It samples a random benign background action (browsing, file I/O, media, spec
+    benchmarks) each step. None of these carry a stage, so a benign episode still
+    leaves every stage and progress bar at zero and runs until the step cap - only the
+    detector-facing trace behind each step now varies instead of always being idle.
     """
 
     def __init__(self, game_config: GameConfig):
@@ -38,4 +40,4 @@ class BenignBotAgent(BotAgent):
         :param game_state: the game state
         :return: action_id
         """
-        return GameState.IDLE
+        return int(game_state.np_random.choice(GameState.BENIGN_ACTIONS))

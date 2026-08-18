@@ -8,7 +8,7 @@ from gymnasium.spaces import Discrete
 from gym_idsgame.envs.dao.network_config import NetworkConfig
 
 from typing import Optional
-from gym_ransomgame.envs.dao.game_state import GameState
+from gym_ransomgame.envs.dao.game_state import AttackType, GameState
 
 
 class GameConfig:
@@ -56,7 +56,7 @@ class GameConfig:
         self.defender = defender
         self.num_attack_types = num_attack_types
         self.max_value = max_value
-        self.num_attack_actions = 4  # 6
+        self.num_attack_actions = AttackType.TERMINATE + 1
         self.num_defense_actions = 2
         self.num_states = 1
         # self.network_config = NetworkConfig(self.num_rows, self.num_cols, connected_layers=False)

@@ -213,11 +213,18 @@ class RansomGameEnv(gym.Env, ABC):
         else:
             self.state.cross_layer_X = tmp_cross_layer_X
 
+        # Update local detector scores
+        num_samples = len(tmp_cross_layer_X[0])
+        clf_predictions, clf_probas = self.gd.cross_layer_class_preds(tmp_cross_layer_X)
+        positive_fractions = [
+            np.count_nonzero(clf_predictions[:, layer] != -1) / num_samples
+            for layer in range(clf_predictions.shape[1])
+        ]
+        self.state.update_local_detector_scores(positive_fractions)
+
+        # Update global detector score
         self.state.advance_global_detector_score(
-            self.gd.score_cross_layer(
-                self.state.cross_layer_X
-                # tmp_cross_layer_X
-            )
+            self.gd.score_cross_layer(self.state.cross_layer_X)
         )
 
     # -------- API ------------
