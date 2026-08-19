@@ -618,7 +618,8 @@ class RansomGameEnv(gym.Env, ABC):
 
         :return: the per-element cardinalities
         """
-        return (GameState.N_PROGRESS_STEPS + 1,)
+        n_levels = GameState.N_PROGRESS_STEPS + 1
+        return (n_levels,) + (n_levels,) * GameState.NUM_LOCAL_DETECTORS + (n_levels,)
 
     def get_state_id(self, observation: Any) -> int:
         """
@@ -639,7 +640,11 @@ class RansomGameEnv(gym.Env, ABC):
             )
             dims = self.attacker_state_dims
         else:
-            key = (int(observation["encryption_level"]),)
+            key = (
+                (int(observation["encryption_level"]),)
+                + tuple(int(x) for x in observation["local_detector_scores"])
+                + (int(observation["global_detector_score"]),)
+            )
             dims = self.defender_state_dims
 
         return int(np.ravel_multi_index(key, dims))

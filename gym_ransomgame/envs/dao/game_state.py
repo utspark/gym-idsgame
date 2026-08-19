@@ -808,7 +808,12 @@ class GameState:
         defender_observation = {
             # "stages": self.stages.flatten().astype(int),
             "encryption_level": int(self.encryption_level),
-            # "local_detector_scores": self.local_detector_scores.astype(np.float32),
+            # Averaged across the buffer's window history rather than exposing the raw
+            # per-window rows, then rounded back to the same discretized levels the rest
+            # of the observation uses.
+            "local_detector_scores": np.round(
+                self.local_detector_scores.mean(axis=0)
+            ).astype(int),
             "global_detector_score": int(self.global_detector_score),
         }
 

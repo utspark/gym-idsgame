@@ -134,12 +134,15 @@ class GameConfig:
         :return: observation space
         """
         # TODO should record action history in defender observations
-        # NOTE: kept in sync with GameState.get_defender_observation, which currently
-        # emits only the encryption bar. Add exfiltration_level here (and there) to make
-        # exfiltration progress visible to the defender.
+        # NOTE: kept in sync with GameState.get_defender_observation. Add
+        # exfiltration_level here (and there) to make exfiltration progress visible to
+        # the defender.
         observation_space = gym.spaces.Dict(
             {
                 "encryption_level": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
+                "local_detector_scores": gym.spaces.MultiDiscrete(
+                    [GameState.N_PROGRESS_STEPS + 1] * GameState.NUM_LOCAL_DETECTORS
+                ),
                 "global_detector_score": Discrete(n=GameState.N_PROGRESS_STEPS + 1),
             }
         )
