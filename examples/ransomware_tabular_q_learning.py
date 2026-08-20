@@ -8,6 +8,7 @@ from gym_idsgame.agents.training_agents.q_learning.q_agent_config import QAgentC
 from gym_ransomgame.agents.training_agents.q_learning.tabular_q_learning.ransom_tabular_q_agent import (
     RansomTabularQAgent,
 )
+from gym_ransomgame.envs.util.ransomgame_util import nonzero_q_table_states
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -60,8 +61,8 @@ def make_config(
 def main() -> None:
     random_seed = 0
     load_q_table = False
-    attacker = True
-    defender = False
+    attacker = False
+    defender = True
 
     create_artefact_dirs(SCRIPT_DIR, random_seed)
     config = make_config(SCRIPT_DIR, random_seed, attacker=attacker, defender=defender)
@@ -103,8 +104,16 @@ def main() -> None:
         else:
             table = agent.Q_defender
 
-        for i in range(table.shape[0]):
-            print(table[i])
+        state_map = nonzero_q_table_states(agent.env, table, attacker=attacker)
+        formatted_rows = {
+            i: [f"{v:.8g}" for v in table[i]] for i in state_map
+        }
+        col_width = max(
+            len(value) for values in formatted_rows.values() for value in values
+        )
+        for i in sorted(state_map):
+            row = " ".join(f"{value:>{col_width}}" for value in formatted_rows[i])
+            print(f"[{row}]", state_map[i])
     elif attacker and defender:
         env_name = "ransomgame-v0"
         env = gym.make(env_name, save_dir=config.save_dir)

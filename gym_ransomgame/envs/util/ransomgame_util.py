@@ -1,7 +1,7 @@
 """
 Utility functions for the gym-idsgame environment
 """
-from typing import Union, List
+from typing import Any, TYPE_CHECKING, Union, List
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -12,6 +12,33 @@ import cv2
 #from gym_idsgame.envs.dao.game_state import GameState
 from gym_idsgame.envs.dao.node_type import NodeType
 #from gym_idsgame.envs.dao.network_config import NetworkConfig
+
+if TYPE_CHECKING:
+    # ransomgame_env imports this module, so importing RansomGameEnv here at runtime
+    # would form a cycle; only needed for the type hint below.
+    from gym_ransomgame.envs.ransomgame_env import RansomGameEnv
+
+
+def nonzero_q_table_states(
+    env: "RansomGameEnv", q_table: np.ndarray, attacker: bool
+) -> dict[int, dict[str, Any]]:
+    """
+    Maps each Q-table row with at least one nonzero entry to the observation it encodes.
+
+    Rows that are all-zero were never visited during training, so only nonzero rows are
+    worth decoding; visited-but-still-zero rows (e.g. a state only ever bootstrapped from)
+    are indistinguishable from unvisited ones and are excluded along with them.
+
+    :param env: the RansomGameEnv the table was trained against, for its state-id encoding
+    :param q_table: Q_attacker or Q_defender, as saved by RansomTabularQAgent
+    :param attacker: whether q_table is Q_attacker (True) or Q_defender (False)
+    :return: mapping from nonzero row index to the observation fields that state id decodes to
+    """
+    nonzero_rows = np.flatnonzero(np.any(q_table != 0, axis=1))
+    return {
+        int(row): env.get_observation_from_state_id(int(row), attacker=attacker)
+        for row in nonzero_rows
+    }
 
 
 def get_img_from_fig(fig, dpi=180):

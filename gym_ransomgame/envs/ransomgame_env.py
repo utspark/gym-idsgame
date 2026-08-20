@@ -649,6 +649,34 @@ class RansomGameEnv(gym.Env, ABC):
 
         return int(np.ravel_multi_index(key, dims))
 
+    def get_observation_from_state_id(
+        self, state_id: int, attacker: bool
+    ) -> dict[str, Any]:
+        """
+        Inverts get_state_id: recovers the observation fields a state id was encoded from.
+
+        :param state_id: a state id in [0, num_attacker_states) or [0, num_defender_states)
+        :param attacker: whether state_id indexes attacker or defender states
+        :return: the observation fields the id decodes to, keyed the same way get_state_id reads them
+        """
+        if attacker:
+            dims = self.attacker_state_dims
+            n_stages = self.ransomgame_config.game_config.stages.shape[1]
+            key = np.unravel_index(state_id, dims)
+            return {
+                "stages": np.array(key[:n_stages]),
+                "exfiltration_level": int(key[n_stages]),
+                "encryption_level": int(key[n_stages + 1]),
+            }
+        else:
+            dims = self.defender_state_dims
+            key = np.unravel_index(state_id, dims)
+            return {
+                "encryption_level": int(key[0]),
+                "local_detector_scores": np.array(key[1:-1]),
+                "global_detector_score": int(key[-1]),
+            }
+
 
 class AttackerEnv(RansomGameEnv, ABC):
     """
